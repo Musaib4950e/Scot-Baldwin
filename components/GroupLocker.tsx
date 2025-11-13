@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import type { User } from '../types';
 import { db } from '../utils/db';
@@ -6,7 +7,7 @@ import { GoogleGenAI } from "@google/genai";
 
 interface GroupLockerProps {
   users: User[];
-  onLogin: (user: User) => void;
+  onLogin: (user: User) => Promise<void>;
 }
 
 const EmailDisplay: React.FC<{ content: string }> = ({ content }) => {
@@ -40,6 +41,7 @@ const EmailDisplay: React.FC<{ content: string }> = ({ content }) => {
 
 const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot' | 'reset'>('signup');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   // Login state
   const [loginUsername, setLoginUsername] = useState('');
@@ -64,37 +66,43 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
   const [generatedEmailContent, setGeneratedEmailContent] = useState<string | null>(null);
 
 
-  const handleLoginAttempt = (e: React.FormEvent) => {
+  const handleLoginAttempt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginUsername || !loginPassword) {
         setLoginError("Please enter username and password.");
         return;
     }
-    const authenticatedUser = db.authenticate(loginUsername, loginPassword);
+    setIsSubmitting(true);
+    setLoginError('');
+    const authenticatedUser = await db.authenticate(loginUsername, loginPassword);
     if (authenticatedUser) {
-      onLogin(authenticatedUser);
+      await onLogin(authenticatedUser);
     } else {
       setLoginError("Invalid credentials. Please try again.");
     }
+    setIsSubmitting(false);
   };
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUsername.trim() || !newPassword.trim()) {
       setCreateError("Username and password cannot be empty.");
       return;
     }
-    const newUser = db.createUser({ 
+    setIsSubmitting(true);
+    setCreateError('');
+    const newUser = await db.createUser({ 
         username: newUsername, 
         password: newPassword,
         instagramUsername: newInstagram
     });
 
     if (newUser) {
-      onLogin(newUser);
+      await onLogin(newUser);
     } else {
       setCreateError("Username is already taken.");
     }
+    setIsSubmitting(false);
   };
 
   const handleRequestRecovery = async (e: React.FormEvent) => {
@@ -105,8 +113,9 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
       setRecoveryError('Please enter an email address.');
       return;
     }
+    setIsSubmitting(true);
     
-    const user = db.generatePasswordRecoveryToken(recoveryEmail);
+    const user = await db.generatePasswordRecoveryToken(recoveryEmail);
     if (user && user.recoveryToken) {
         setGeneratedToken(user.recoveryToken);
         setIsGeneratingEmail(true);
@@ -132,16 +141,18 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
     } else {
         setRecoveryError('No account found with that email address. An email must be added to your profile by an admin.');
     }
+    setIsSubmitting(false);
   };
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setResetError('');
     if (!inputToken.trim() || !newPasswordForReset.trim()) {
       setResetError('Please fill in both the token and a new password.');
       return;
     }
-    const user = db.resetPasswordWithToken(inputToken.trim(), newPasswordForReset.trim());
+    setIsSubmitting(true);
+    const user = await db.resetPasswordWithToken(inputToken.trim(), newPasswordForReset.trim());
     if (user) {
         setLoginMessage('Password has been successfully reset. Please log in.');
         setMode('login');
@@ -154,6 +165,7 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
     } else {
         setResetError('The provided recovery code is invalid or has expired. Please try again.');
     }
+    setIsSubmitting(false);
   };
 
   const switchMode = (newMode: 'login' | 'signup' | 'forgot' | 'reset') => {
@@ -181,8 +193,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
                 <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Create a password" className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"/>
                 <input type="text" value={newInstagram} onChange={(e) => setNewInstagram(e.target.value)} placeholder="Instagram username (optional)" className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"/>
                 {createError && <p className="text-red-400 text-sm text-center">{createError}</p>}
-                <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600" disabled={!newUsername.trim() || !newPassword.trim()}>
-                  Sign Up & Join
+                <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70 flex items-center justify-center" disabled={!newUsername.trim() || !newPassword.trim() || isSubmitting}>
+                  {isSubmitting ? 'Creating...' : 'Sign Up & Join'}
                 </button>
               </form>
               <p className="text-center text-sm text-slate-400 mt-6">
@@ -201,8 +213,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
             <form onSubmit={handleRequestRecovery} className="flex flex-col gap-4">
                <input type="email" value={recoveryEmail} onChange={(e) => setRecoveryEmail(e.target.value)} placeholder="Your email address" className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"/>
               {recoveryError && <p className="text-red-400 text-sm text-center">{recoveryError}</p>}
-              <button type="submit" className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold" >
-                Send Recovery Code
+              <button type="submit" className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70 flex items-center justify-center" disabled={isSubmitting}>
+                {isSubmitting ? 'Sending...' : 'Send Recovery Code'}
               </button>
             </form>
             <p className="text-center text-sm text-slate-400 mt-6">
@@ -237,8 +249,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
                <input type="text" value={inputToken} onChange={(e) => setInputToken(e.target.value)} placeholder="Enter recovery code from email" className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"/>
                <input type="password" value={newPasswordForReset} onChange={(e) => setNewPasswordForReset(e.target.value)} placeholder="Enter new password" className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"/>
               {resetError && <p className="text-red-400 text-sm text-center">{resetError}</p>}
-              <button type="submit" className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold" >
-                Reset Password
+              <button type="submit" className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70 flex items-center justify-center" disabled={isSubmitting}>
+                {isSubmitting ? 'Resetting...' : 'Reset Password'}
               </button>
             </form>
              <p className="text-center text-sm text-slate-400 mt-6">
@@ -263,8 +275,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
                   Forgot your password?
                 </button>
               </div>
-              <button type="submit" className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600" disabled={!loginUsername || !loginPassword}>
-                Login
+              <button type="submit" className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70 flex items-center justify-center" disabled={!loginUsername || !loginPassword || isSubmitting}>
+                {isSubmitting ? 'Logging in...' : 'Login'}
               </button>
             </form>
             <p className="text-center text-sm text-slate-400 mt-6">

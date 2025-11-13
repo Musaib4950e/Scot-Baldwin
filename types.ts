@@ -32,7 +32,7 @@ export interface Chat {
   type: ChatType;
   name?: string; // For groups
   members: string[]; // array of user IDs
-  icon?: React.FC<{ className?: string }>; // For groups
+  // FIX: Removed unused `icon` property that was causing a missing React namespace error.
   creatorId?: string; // User ID of the group creator
   password?: string; // Optional password for the group
 }

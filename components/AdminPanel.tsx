@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+
+import React, { useState, useMemo, useEffect } from 'react';
 import { User, Chat, ChatType, Message } from '../types';
 import { db } from '../utils/db';
 import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon } from './icons';
@@ -10,13 +11,36 @@ interface AdminPanelProps {
     users: User[];
     chats: Chat[];
     messages: Message[];
-    onLogout: () => void;
-    onUpdateUserProfile: (params: { userId: string, avatar: string, bio: string, email: string, phone: string, messageLimit?: number }) => void;
-    onResetUserPassword: (userId: string, newPass: string) => void;
-    onUpdateGroupDetails: (params: { chatId: string, name: string, password?: string }) => void;
-    onUpdateGroupMembers: (chatId: string, memberIds: string[]) => void;
-    onDeleteUser: (userId: string) => void;
-    onDeleteGroup: (chatId: string) => void;
+    onLogout: () => Promise<void>;
+    onUpdateUserProfile: (params: { userId: string, avatar: string, bio: string, email: string, phone: string, messageLimit?: number }) => Promise<void>;
+    onResetUserPassword: (userId: string, newPass: string) => Promise<void>;
+    onUpdateGroupDetails: (params: { chatId: string, name: string, password?: string }) => Promise<void>;
+    onUpdateGroupMembers: (chatId: string, memberIds: string[]) => Promise<void>;
+    onDeleteUser: (userId: string) => Promise<void>;
+    onDeleteGroup: (chatId: string) => Promise<void>;
+}
+
+const UserStats: React.FC<{ userId: string }> = ({ userId }) => {
+    const [stats, setStats] = useState<{ sent: number; received: number } | null>(null);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            const userStats = await db.getMessageStatsForUser(userId);
+            setStats(userStats);
+        };
+        fetchStats();
+    }, [userId]);
+
+    if (stats === null) {
+        return <div className="border-t border-slate-700 pt-4 text-sm animate-pulse">Loading stats...</div>
+    }
+
+    return (
+        <div className="border-t border-slate-700 pt-4 flex justify-between items-center text-sm">
+            <span className="font-mono">Sent: {stats.sent}</span>
+            <span className="font-mono">Received: {stats.received}</span>
+        </div>
+    )
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
@@ -31,6 +55,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
     // User form state
     const [avatar, setAvatar] = useState('');
@@ -67,15 +92,19 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         setIsPasswordModalOpen(true);
     };
     
-    const handleProfileUpdate = () => {
+    const handleProfileUpdate = async () => {
         if (!selectedUser) return;
-        onUpdateUserProfile({ userId: selectedUser.id, avatar, bio, email, phone, messageLimit });
+        setIsSubmitting(true);
+        await onUpdateUserProfile({ userId: selectedUser.id, avatar, bio, email, phone, messageLimit });
+        setIsSubmitting(false);
         closeAllModals();
     };
 
-    const handlePasswordReset = () => {
+    const handlePasswordReset = async () => {
         if (!selectedUser || !newPassword.trim()) return;
-        onResetUserPassword(selectedUser.id, newPassword.trim());
+        setIsSubmitting(true);
+        await onResetUserPassword(selectedUser.id, newPassword.trim());
+        setIsSubmitting(false);
         closeAllModals();
     };
 
@@ -94,10 +123,14 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         setIsEditGroupModalOpen(true);
     };
 
-    const handleGroupUpdate = () => {
+    const handleGroupUpdate = async () => {
         if (!selectedGroup) return;
-        onUpdateGroupDetails({ chatId: selectedGroup.id, name: groupName, password: groupPassword });
-        onUpdateGroupMembers(selectedGroup.id, groupMembers);
+        setIsSubmitting(true);
+        await Promise.all([
+          onUpdateGroupDetails({ chatId: selectedGroup.id, name: groupName, password: groupPassword }),
+          onUpdateGroupMembers(selectedGroup.id, groupMembers)
+        ]);
+        setIsSubmitting(false);
         closeAllModals();
     };
     
@@ -135,11 +168,13 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     </div>
                 </header>
                  <div className="flex-grow p-6 overflow-y-auto space-y-6 custom-scrollbar">
-                    {viewingGroupMessages.map(msg => {
+                    {viewingGroupMessages.length > 0 ? viewingGroupMessages.map(msg => {
                         const author = users.find(u => u.id === msg.authorId);
                         if (!author) return null; // Should not happen
                         return <ChatMessage key={msg.id} message={msg} author={author} isCurrentUser={false} isGroupChat={true} />;
-                    })}
+                    }) : (
+                        <div className="text-center text-slate-500 mt-8">No messages in this group yet.</div>
+                    )}
                 </div>
             </div>
          )
@@ -183,38 +218,32 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <div>
                             <h1 className="text-4xl font-bold mb-8 text-white">User Management</h1>
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                {users.filter(u => !u.isAdmin).map(user => {
-                                    const stats = db.getMessageStatsForUser(user.id);
-                                    return (
-                                        <div key={user.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col">
-                                            <div className="flex items-center gap-4 mb-4">
-                                                <div className="w-14 h-14 rounded-full bg-blue-500 flex items-center justify-center text-2xl font-bold flex-shrink-0">{user.avatar}</div>
-                                                <div className="overflow-hidden">
-                                                    <p className="font-bold text-lg truncate">{user.username}</p>
-                                                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${user.online ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}>
-                                                        <span className={`h-1.5 w-1.5 rounded-full ${user.online ? 'bg-green-500' : 'bg-slate-500'}`}></span>
-                                                        {user.online ? 'Online' : 'Offline'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <div className="space-y-3 text-sm text-slate-300 flex-grow mb-4">
-                                                <p><strong className="text-slate-400">Bio:</strong> {user.bio || 'N/A'}</p>
-                                                <p><strong className="text-slate-400">Email:</strong> {user.email || 'N/A'}</p>
-                                                <p><strong className="text-slate-400">Phone:</strong> {user.phone || 'N/A'}</p>
-                                                <p><strong className="text-slate-400">Msg Limit:</strong> {user.messageLimit === undefined ? 'Unlimited' : user.messageLimit}</p>
-                                            </div>
-                                             <div className="border-t border-slate-700 pt-4 flex justify-between items-center text-sm">
-                                                <span className="font-mono">Sent: {stats.sent}</span>
-                                                <span className="font-mono">Received: {stats.received}</span>
-                                            </div>
-                                            <div className="mt-4 grid grid-cols-3 gap-2">
-                                                <button onClick={() => openEditUserModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
-                                                <button onClick={() => openPasswordModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><KeyIcon className="w-4 h-4" /> Pass</button>
-                                                <button onClick={() => handleDeleteUserConfirm(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-800/50 hover:bg-red-700/50 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button>
+                                {users.filter(u => !u.isAdmin).map(user => (
+                                    <div key={user.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col">
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div className="w-14 h-14 rounded-full bg-blue-500 flex items-center justify-center text-2xl font-bold flex-shrink-0">{user.avatar}</div>
+                                            <div className="overflow-hidden">
+                                                <p className="font-bold text-lg truncate">{user.username}</p>
+                                                <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${user.online ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}>
+                                                    <span className={`h-1.5 w-1.5 rounded-full ${user.online ? 'bg-green-500' : 'bg-slate-500'}`}></span>
+                                                    {user.online ? 'Online' : 'Offline'}
+                                                </span>
                                             </div>
                                         </div>
-                                    );
-                                })}
+                                        <div className="space-y-3 text-sm text-slate-300 flex-grow mb-4">
+                                            <p><strong className="text-slate-400">Bio:</strong> {user.bio || 'N/A'}</p>
+                                            <p><strong className="text-slate-400">Email:</strong> {user.email || 'N/A'}</p>
+                                            <p><strong className="text-slate-400">Phone:</strong> {user.phone || 'N/A'}</p>
+                                            <p><strong className="text-slate-400">Msg Limit:</strong> {user.messageLimit === undefined ? 'Unlimited' : user.messageLimit}</p>
+                                        </div>
+                                        <UserStats userId={user.id} />
+                                        <div className="mt-4 grid grid-cols-3 gap-2">
+                                            <button onClick={() => openEditUserModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
+                                            <button onClick={() => openPasswordModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><KeyIcon className="w-4 h-4" /> Pass</button>
+                                            <button onClick={() => handleDeleteUserConfirm(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-800/50 hover:bg-red-700/50 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     )}
@@ -290,7 +319,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 </div>
                                 <div className="mt-6 flex justify-end gap-3">
                                     <button onClick={closeAllModals} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
-                                    <button onClick={handleProfileUpdate} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold">Save Changes</button>
+                                    <button onClick={handleProfileUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
                                 </div>
                             </div>
                         )}
@@ -303,7 +332,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 </div>
                                 <div className="mt-6 flex justify-end gap-3">
                                     <button onClick={closeAllModals} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
-                                    <button onClick={handlePasswordReset} disabled={!newPassword.trim()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed">Reset Password</button>
+                                    <button onClick={handlePasswordReset} disabled={!newPassword.trim() || isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed">{isSubmitting ? 'Resetting...' : 'Reset Password'}</button>
                                 </div>
                            </div>
                         )}
@@ -334,7 +363,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 </div>
                                 <div className="mt-6 flex justify-end gap-3">
                                     <button onClick={closeAllModals} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
-                                    <button onClick={handleGroupUpdate} disabled={!groupName.trim()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed">Save Changes</button>
+                                    <button onClick={handleGroupUpdate} disabled={!groupName.trim() || isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
                                 </div>
                            </div>
                         )}

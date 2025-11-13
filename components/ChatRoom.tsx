@@ -10,10 +10,10 @@ interface ChatRoomProps {
   users: User[];
   chats: Chat[];
   messages: Message[];
-  onSendMessage: (chatId: string, text: string) => void;
-  onCreateChat: (targetUser: User) => Chat;
-  onCreateGroupChat: (params: { memberIds: string[]; groupName: string; }) => Chat;
-  onLogout: () => void;
+  onSendMessage: (chatId: string, text: string) => Promise<void>;
+  onCreateChat: (targetUser: User) => Promise<Chat>;
+  onCreateGroupChat: (params: { memberIds: string[]; groupName: string; }) => Promise<Chat>;
+  onLogout: () => Promise<void>;
 }
 
 // --- Helper Functions ---
@@ -31,12 +31,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
+  const [isSending, setIsSending] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
 
   // Group Creation Modal State
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [unlockedGroupIds, setUnlockedGroupIds] = useState<Set<string>>(new Set());
@@ -109,11 +111,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
     }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (messageInput.trim() && activeChatId) {
-      onSendMessage(activeChatId, messageInput.trim());
+      setIsSending(true);
+      await onSendMessage(activeChatId, messageInput.trim());
       setMessageInput('');
+      setIsSending(false);
       
       if (typingTimeoutRef.current) {
           clearTimeout(typingTimeoutRef.current);
@@ -124,9 +128,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
     }
   };
   
-  const handleUserSearchClick = (user: User) => {
+  const handleUserSearchClick = async (user: User) => {
       if(user.id === currentUser.id) return;
-      const newChat = onCreateChat(user);
+      const newChat = await onCreateChat(user);
       setActiveChatId(newChat.id);
       setSearchQuery('');
   }
@@ -149,9 +153,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
     }
   }
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (!newGroupName.trim() || selectedUserIds.length === 0) return;
-    const newChat = onCreateGroupChat({
+    setIsSubmittingGroup(true);
+    const newChat = await onCreateGroupChat({
         memberIds: selectedUserIds,
         groupName: newGroupName.trim(),
     });
@@ -159,6 +164,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
     setIsCreatingGroup(false);
     setNewGroupName('');
     setSelectedUserIds([]);
+    setIsSubmittingGroup(false);
     // Switch to the new chat
     setActiveChatId(newChat.id);
   };
@@ -225,10 +231,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
                     <button onClick={() => setIsCreatingGroup(false)} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
                     <button
                         onClick={handleCreateGroup}
-                        disabled={!newGroupName.trim() || selectedUserIds.length === 0}
+                        disabled={!newGroupName.trim() || selectedUserIds.length === 0 || isSubmittingGroup}
                         className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed"
                     >
-                        Create Group
+                        {isSubmittingGroup ? 'Creating...' : 'Create Group'}
                     </button>
                 </div>
             </div>
@@ -397,8 +403,9 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
                   onChange={handleMessageInputChange}
                   placeholder="Type a message..."
                   className="w-full bg-slate-700 border border-slate-600 rounded-full py-3 pl-5 pr-16 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  disabled={isSending}
                 />
-                <button type="submit" disabled={!messageInput.trim()} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-blue-600 text-white hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors">
+                <button type="submit" disabled={!messageInput.trim() || isSending} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-blue-600 text-white hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors">
                   <PaperAirplaneIcon className="w-5 h-5" />
                 </button>
               </form>

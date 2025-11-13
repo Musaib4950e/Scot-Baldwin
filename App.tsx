@@ -28,24 +28,37 @@ interface UpdateGroupDetailsParams {
 
 
 const App: React.FC = () => {
-  const [users, setUsers] = useState<User[]>([...db.getUsers()]);
-  const [chats, setChats] = useState<Chat[]>([...db.getChats()]);
-  const [messages, setMessages] = useState<Message[]>([...db.getMessages()]);
-  const [currentUser, setCurrentUser] = useState<User | null>(db.getCurrentUser());
-  const [, forceUpdate] = useReducer(x => x + 1, 0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [users, setUsers] = useState<User[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  const fetchData = async () => {
+    const [usersData, chatsData, messagesData, currentUserData] = await Promise.all([
+        db.getUsers(),
+        db.getChats(),
+        db.getMessages(),
+        db.getCurrentUser(),
+    ]);
+    setUsers(usersData);
+    setChats(chatsData);
+    setMessages(messagesData);
+    setCurrentUser(currentUserData);
+    setIsLoading(false);
+  };
 
   useEffect(() => {
+    fetchData();
+    
     const handleBeforeUnload = () => {
         // Log out the user when the tab is closed to set their status to offline
-        if (db.getCurrentUser()) {
+        if (db.isUserLoggedIn()) {
             db.logout();
         }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
-
-    // Initial sync
-    setUsers([...db.getUsers()]);
 
     return () => {
         window.removeEventListener('beforeunload', handleBeforeUnload);
@@ -53,74 +66,81 @@ const App: React.FC = () => {
   }, []);
 
 
-  const handleLogin = (user: User) => {
-    const loggedInUser = db.login(user);
+  const handleLogin = async (user: User) => {
+    const loggedInUser = await db.login(user);
     setCurrentUser(loggedInUser);
-    setUsers([...db.getUsers()]);
+    setUsers(await db.getUsers());
   };
   
-  const handleLogout = () => {
-    db.logout();
+  const handleLogout = async () => {
+    await db.logout();
     setCurrentUser(null);
-    setUsers([...db.getUsers()]);
+    setUsers(await db.getUsers());
   };
 
-  const handleSendMessage = (chatId: string, text: string) => {
+  const handleSendMessage = async (chatId: string, text: string) => {
     if (!currentUser) return;
-    db.addMessage(chatId, currentUser.id, text);
-    setMessages([...db.getMessages()]);
+    await db.addMessage(chatId, currentUser.id, text);
+    setMessages(await db.getMessages());
   };
   
-  const handleCreateChat = (targetUser: User): Chat => {
+  const handleCreateChat = async (targetUser: User): Promise<Chat> => {
     if (!currentUser) throw new Error("No current user");
-    const newChat = db.findOrCreateDM(currentUser, targetUser);
-    setChats([...db.getChats()]);
+    const newChat = await db.findOrCreateDM(currentUser, targetUser);
+    setChats(await db.getChats());
     return newChat;
   };
 
-  const handleCreateGroupChat = ({memberIds, groupName}: CreateGroupChatParams): Chat => {
+  const handleCreateGroupChat = async ({memberIds, groupName}: CreateGroupChatParams): Promise<Chat> => {
       if (!currentUser) throw new Error("No current user");
-      const newChat = db.createGroupChat(currentUser.id, memberIds, groupName);
-      setChats([...db.getChats()]);
+      const newChat = await db.createGroupChat(currentUser.id, memberIds, groupName);
+      setChats(await db.getChats());
       return newChat;
   };
 
-  const handleUpdateUserProfile = ({ userId, avatar, bio, email, phone, messageLimit }: UpdateProfileParams) => {
-      db.updateUserProfile(userId, { avatar, bio, email, phone, messageLimit });
-      setUsers([...db.getUsers()]);
-      // If the admin is editing their own profile, update currentUser state as well
+  const handleUpdateUserProfile = async ({ userId, avatar, bio, email, phone, messageLimit }: UpdateProfileParams) => {
+      await db.updateUserProfile(userId, { avatar, bio, email, phone, messageLimit });
+      const updatedUsers = await db.getUsers();
+      setUsers(updatedUsers);
       if (currentUser && currentUser.id === userId) {
-          setCurrentUser(db.getCurrentUser());
+          setCurrentUser(updatedUsers.find(u => u.id === userId) || null);
       }
   };
 
-  const handleResetUserPassword = (userId: string, newPassword: string) => {
-      db.resetUserPassword(userId, newPassword);
-      setUsers([...db.getUsers()]);
+  const handleResetUserPassword = async (userId: string, newPassword: string) => {
+      await db.resetUserPassword(userId, newPassword);
+      setUsers(await db.getUsers());
   };
 
-  const handleUpdateGroupDetails = ({ chatId, name, password }: UpdateGroupDetailsParams) => {
-    db.updateGroupDetails(chatId, { name, password });
-    setChats([...db.getChats()]);
+  const handleUpdateGroupDetails = async ({ chatId, name, password }: UpdateGroupDetailsParams) => {
+    await db.updateGroupDetails(chatId, { name, password });
+    setChats(await db.getChats());
   };
 
-  const handleUpdateGroupMembers = (chatId: string, memberIds: string[]) => {
-    db.updateGroupMembers(chatId, memberIds);
-    setChats([...db.getChats()]);
+  const handleUpdateGroupMembers = async (chatId: string, memberIds: string[]) => {
+    await db.updateGroupMembers(chatId, memberIds);
+    setChats(await db.getChats());
   };
 
-  const handleDeleteUser = (userId: string) => {
-    db.deleteUser(userId);
-    setUsers([...db.getUsers()]);
-    setChats([...db.getChats()]);
-    setMessages([...db.getMessages()]);
+  const handleDeleteUser = async (userId: string) => {
+    await db.deleteUser(userId);
+    await fetchData(); // Refetch all data as this is a major change
   };
 
-  const handleDeleteGroup = (chatId: string) => {
-    db.deleteGroup(chatId);
-    setChats([...db.getChats()]);
-    setMessages([...db.getMessages()]);
+  const handleDeleteGroup = async (chatId: string) => {
+    await db.deleteGroup(chatId);
+    setChats(await db.getChats());
+    setMessages(await db.getMessages());
   };
+
+  if (isLoading) {
+    return (
+        <div className="bg-slate-900 text-white min-h-screen w-full flex flex-col items-center justify-center">
+            <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-400 mb-4 animate-pulse">BAK -Ko</h1>
+            <p className="text-lg text-slate-400">Connecting to the server...</p>
+        </div>
+    )
+  }
 
 
   return (

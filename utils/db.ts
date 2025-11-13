@@ -1,3 +1,4 @@
+
 import { User, Chat, Message, ChatType } from '../types';
 
 // --- LocalStorage Utility ---
@@ -25,6 +26,15 @@ const writeToStorage = <T>(key: string, value: T) => {
   }
 };
 
+// --- API Simulation ---
+const simulateDelay = <T>(action: () => T): Promise<T> => {
+    return new Promise(resolve => {
+        setTimeout(() => {
+            resolve(action());
+        }, Math.random() * 200 + 50); // Simulate 50-250ms network latency
+    });
+};
+
 // --- Database API ---
 class Database {
   private users: User[];
@@ -38,7 +48,6 @@ class Database {
     this.messages = readFromStorage('messages', []);
     this.currentUserId = readFromStorage('current-user-id', null);
     
-    // Ensure admin user exists
     this.ensureAdminExists();
   }
   
@@ -54,7 +63,7 @@ class Database {
         isAdmin: true,
         bio: 'The administrator of BAK-Ko.'
       };
-      this.users.unshift(adminUser); // Add to the beginning of the list
+      this.users.unshift(adminUser);
       this.persistUsers();
     }
   }
@@ -77,24 +86,26 @@ class Database {
 
   // --- Public API ---
   
-  getUsers = (): User[] => this.users;
-  getChats = (): Chat[] => this.chats;
-  getMessages = (): Message[] => this.messages;
+  getUsers = (): Promise<User[]> => simulateDelay(() => this.users);
+  getChats = (): Promise<Chat[]> => simulateDelay(() => this.chats);
+  getMessages = (): Promise<Message[]> => simulateDelay(() => this.messages);
   
-  getCurrentUser = (): User | null => {
+  isUserLoggedIn = (): boolean => !!this.currentUserId;
+  
+  getCurrentUser = (): Promise<User | null> => simulateDelay(() => {
       if (!this.currentUserId) return null;
       return this.users.find(u => u.id === this.currentUserId) || null;
-  }
+  })
 
-  authenticate = (username: string, password: string): User | null => {
+  authenticate = (username: string, password: string): Promise<User | null> => simulateDelay(() => {
     const user = this.users.find(u => u.username.toLowerCase() === username.trim().toLowerCase());
     if (user && user.password === password) {
       return user;
     }
     return null;
-  }
+  })
 
-  createUser = ({ username, password, instagramUsername }: { username: string, password: string, instagramUsername?: string }): User | null => {
+  createUser = ({ username, password, instagramUsername }: { username: string, password: string, instagramUsername?: string }): Promise<User | null> => simulateDelay(() => {
     if (this.users.find(u => u.username.toLowerCase() === username.toLowerCase().trim())) {
       return null; // Username already exists
     }
@@ -110,9 +121,9 @@ class Database {
     this.users.push(newUser);
     this.persistUsers();
     return newUser;
-  }
+  })
 
-  setUserOnlineStatus = (userId: string, status: boolean) => {
+  private setUserOnlineStatus = (userId: string, status: boolean): void => {
     const userIndex = this.users.findIndex(u => u.id === userId);
     if (userIndex !== -1) {
       this.users[userIndex].online = status;
@@ -120,23 +131,23 @@ class Database {
     }
   };
 
-  login = (user: User): User => {
+  login = (user: User): Promise<User> => simulateDelay(() => {
     this.currentUserId = user.id;
     this.persistCurrentUserId();
     this.setUserOnlineStatus(user.id, true);
     // Return the user from the potentially updated users array
     return this.users.find(u => u.id === user.id)!;
-  };
+  });
   
-  logout = () => {
+  logout = (): Promise<void> => simulateDelay(() => {
     if (this.currentUserId) {
       this.setUserOnlineStatus(this.currentUserId, false);
     }
     this.currentUserId = null;
     this.persistCurrentUserId();
-  };
+  });
 
-  addMessage = (chatId: string, authorId: string, text: string): Message => {
+  addMessage = (chatId: string, authorId: string, text: string): Promise<Message> => simulateDelay(() => {
     const newMessage: Message = {
       id: `msg-${Date.now()}`,
       chatId,
@@ -147,10 +158,9 @@ class Database {
     this.messages.push(newMessage);
     this.persistMessages();
     return newMessage;
-  };
+  });
   
-  findOrCreateDM = (currentUser: User, targetUser: User): Chat => {
-    // Check if DM already exists
+  findOrCreateDM = (currentUser: User, targetUser: User): Promise<Chat> => simulateDelay(() => {
     const existingChat = this.chats.find(chat => 
         chat.type === ChatType.DM &&
         chat.members.length === 2 &&
@@ -170,28 +180,28 @@ class Database {
     this.chats.push(newChat);
     this.persistChats();
     return newChat;
-  };
+  });
 
-  createGroupChat = (creatorId: string, memberIds: string[], groupName: string): Chat => {
-    const allMemberIds = [...new Set([creatorId, ...memberIds])]; // Ensure creator is included and no duplicates
+  createGroupChat = (creatorId: string, memberIds: string[], groupName: string): Promise<Chat> => simulateDelay(() => {
+    const allMemberIds = [...new Set([creatorId, ...memberIds])];
     
     const newChat: Chat = {
       id: `chat-${Date.now()}`,
       type: ChatType.GROUP,
       name: groupName.trim(),
       members: allMemberIds,
-      creatorId: creatorId, // Store who created the group
+      creatorId: creatorId,
     };
     this.chats.push(newChat);
     this.persistChats();
     return newChat;
-  };
+  });
 
-  generatePasswordRecoveryToken = (email: string): User | null => {
+  generatePasswordRecoveryToken = (email: string): Promise<User | null> => simulateDelay(() => {
     const userIndex = this.users.findIndex(u => u.email?.toLowerCase() === email.toLowerCase().trim());
     if (userIndex === -1) return null;
 
-    const token = Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit code
+    const token = Math.floor(100000 + Math.random() * 900000).toString();
     const expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
 
     this.users[userIndex].recoveryToken = token;
@@ -199,15 +209,14 @@ class Database {
     this.persistUsers();
 
     return this.users[userIndex];
-  }
+  })
 
-  resetPasswordWithToken = (token: string, newPassword: string): User | null => {
+  resetPasswordWithToken = (token: string, newPassword: string): Promise<User | null> => simulateDelay(() => {
     const userIndex = this.users.findIndex(u => u.recoveryToken === token);
     if (userIndex === -1) return null;
 
     const user = this.users[userIndex];
     if (!user.recoveryTokenExpiry || user.recoveryTokenExpiry < Date.now()) {
-        // Token expired
         user.recoveryToken = undefined;
         user.recoveryTokenExpiry = undefined;
         this.persistUsers();
@@ -218,17 +227,15 @@ class Database {
     user.recoveryToken = undefined;
     user.recoveryTokenExpiry = undefined;
     this.persistUsers();
-
     return user;
-  }
+  })
 
   // --- Admin Methods ---
-  updateUserProfile = (userId: string, profileData: { avatar?: string, bio?: string, email?: string, phone?: string, messageLimit?: number }): User | null => {
+  updateUserProfile = (userId: string, profileData: { avatar?: string, bio?: string, email?: string, phone?: string, messageLimit?: number }): Promise<User | null> => simulateDelay(() => {
     const userIndex = this.users.findIndex(u => u.id === userId);
     if (userIndex === -1) return null;
     
     const user = this.users[userIndex];
-
     user.avatar = profileData.avatar ?? user.avatar;
     user.bio = profileData.bio ?? user.bio;
     user.email = profileData.email ?? user.email;
@@ -237,44 +244,41 @@ class Database {
 
     this.persistUsers();
     return this.users[userIndex];
-  };
+  });
 
-  resetUserPassword = (userId: string, newPassword: string): User | null => {
+  resetUserPassword = (userId: string, newPassword: string): Promise<User | null> => simulateDelay(() => {
       const userIndex = this.users.findIndex(u => u.id === userId);
       if (userIndex === -1) return null;
-
       this.users[userIndex].password = newPassword;
       this.persistUsers();
       return this.users[userIndex];
-  };
+  });
   
-  updateGroupDetails = (chatId: string, details: { name?: string, password?: string }): Chat | null => {
+  updateGroupDetails = (chatId: string, details: { name?: string, password?: string }): Promise<Chat | null> => simulateDelay(() => {
     const chatIndex = this.chats.findIndex(c => c.id === chatId);
     if (chatIndex === -1) return null;
 
     const chat = this.chats[chatIndex];
     if(details.name) chat.name = details.name.trim();
 
-    // Check if password key exists to allow setting an empty password
     if(Object.prototype.hasOwnProperty.call(details, 'password')) {
-        chat.password = details.password || undefined; // Set to undefined if empty string
+        chat.password = details.password || undefined;
     }
     
     this.persistChats();
     return chat;
-  };
+  });
 
-  updateGroupMembers = (chatId: string, memberIds: string[]): Chat | null => {
+  updateGroupMembers = (chatId: string, memberIds: string[]): Promise<Chat | null> => simulateDelay(() => {
     const chatIndex = this.chats.findIndex(c => c.id === chatId);
     if (chatIndex === -1) return null;
     
     this.chats[chatIndex].members = memberIds;
     this.persistChats();
     return this.chats[chatIndex];
-  };
+  });
 
-  deleteUser = (userId: string): void => {
-    // 1. Remove user from all chat member lists
+  deleteUser = (userId: string): Promise<void> => simulateDelay(() => {
     this.chats.forEach(chat => {
         const memberIndex = chat.members.indexOf(userId);
         if (memberIndex > -1) {
@@ -282,35 +286,27 @@ class Database {
         }
     });
 
-    // 2. Filter out chats that are now empty or are DMs with < 2 people
     this.chats = this.chats.filter(chat => {
         if (chat.type === ChatType.DM && chat.members.length < 2) return false;
         return chat.members.length > 0;
     });
 
-    // 3. Delete all messages by the user
     this.messages = this.messages.filter(msg => msg.authorId !== userId);
-    
-    // 4. Remove the user themselves
     this.users = this.users.filter(user => user.id !== userId);
 
     this.persistUsers();
     this.persistChats();
     this.persistMessages();
-  };
+  });
   
-  deleteGroup = (chatId: string): void => {
-    // 1. Delete all messages associated with the group
+  deleteGroup = (chatId: string): Promise<void> => simulateDelay(() => {
     this.messages = this.messages.filter(msg => msg.chatId !== chatId);
-    
-    // 2. Delete the group chat itself
     this.chats = this.chats.filter(chat => chat.id !== chatId);
-    
     this.persistChats();
     this.persistMessages();
-  };
+  });
 
-  getMessageStatsForUser = (userId: string): { sent: number, received: number } => {
+  getMessageStatsForUser = (userId: string): Promise<{ sent: number, received: number }> => simulateDelay(() => {
     const sent = this.messages.filter(m => m.authorId === userId).length;
     let received = 0;
     
@@ -318,10 +314,8 @@ class Database {
     for (const chat of userChats) {
         received += this.messages.filter(m => m.chatId === chat.id && m.authorId !== userId).length;
     }
-
     return { sent, received };
-  }
-
+  })
 }
 
 export const db = new Database();
