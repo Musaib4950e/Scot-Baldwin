@@ -187,9 +187,9 @@ const App: React.FC = () => {
 
   if (isLoading) {
     return (
-        <div className="bg-slate-900 text-white min-h-screen w-full flex flex-col items-center justify-center">
-            <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-400 mb-4 animate-pulse">BAK -Ko</h1>
-            <p className="text-lg text-slate-400">Connecting to the server...</p>
+        <div className="animated-gradient text-white min-h-screen w-full flex flex-col items-center justify-center">
+            <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-teal-300 to-blue-400 mb-4 animate-pulse">BAK -Ko</h1>
+            <p className="text-lg text-slate-400">Initializing secure session...</p>
         </div>
     )
   }
