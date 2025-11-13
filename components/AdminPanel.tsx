@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Chat, ChatType, Message } from '../types';
+import { User, Chat, ChatType, Message, Connection, ConnectionStatus } from '../types';
 import { db } from '../utils/db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 
@@ -11,6 +10,7 @@ interface AdminPanelProps {
     users: User[];
     chats: Chat[];
     messages: Message[];
+    connections: Connection[];
     onLogout: () => Promise<void>;
     onUpdateUserProfile: (params: { userId: string, avatar: string, bio: string, email: string, phone: string, messageLimit?: number }) => Promise<void>;
     onResetUserPassword: (userId: string, newPass: string) => Promise<void>;
@@ -18,6 +18,8 @@ interface AdminPanelProps {
     onUpdateGroupMembers: (chatId: string, memberIds: string[]) => Promise<void>;
     onDeleteUser: (userId: string) => Promise<void>;
     onDeleteGroup: (chatId: string) => Promise<void>;
+    onUpdateConnection: (connectionId: string, status: ConnectionStatus) => Promise<void>;
+    onDeleteConnection: (connectionId: string) => Promise<void>;
 }
 
 const UserStats: React.FC<{ userId: string }> = ({ userId }) => {
@@ -44,9 +46,9 @@ const UserStats: React.FC<{ userId: string }> = ({ userId }) => {
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
-    const { currentUser, users, chats, messages, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup } = props;
+    const { currentUser, users, chats, messages, connections, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection } = props;
     
-    const [view, setView] = useState<'users' | 'groups'>('users');
+    const [view, setView] = useState<'users' | 'groups' | 'requests'>('users');
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<Chat | null>(null);
     const [viewingGroupChat, setViewingGroupChat] = useState<Chat | null>(null);
@@ -69,6 +71,8 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [groupName, setGroupName] = useState('');
     const [groupPassword, setGroupPassword] = useState('');
     const [groupMembers, setGroupMembers] = useState<string[]>([]);
+
+    const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
     
     const viewingGroupMessages = useMemo(() => {
         if (!viewingGroupChat) return [];
@@ -180,6 +184,20 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
          )
     }
     
+    const UserConnections: React.FC<{user: User}> = ({ user }) => {
+        const followers = connections.filter(c => c.toUserId === user.id && c.status === ConnectionStatus.ACCEPTED).map(c => users.find(u => u.id === c.fromUserId));
+        const following = connections.filter(c => c.fromUserId === user.id && c.status === ConnectionStatus.ACCEPTED).map(c => users.find(u => u.id === c.toUserId));
+        const blocked = connections.filter(c => c.status === ConnectionStatus.BLOCKED && (c.fromUserId === user.id || c.toUserId === user.id));
+
+        return (
+            <div className="border-t border-slate-700 pt-4 flex justify-around text-center text-sm">
+                <div><span className="font-bold text-base block">{followers.length}</span><span className="text-slate-400">Followers</span></div>
+                <div><span className="font-bold text-base block">{following.length}</span><span className="text-slate-400">Following</span></div>
+                <div><span className="font-bold text-base block">{blocked.length}</span><span className="text-slate-400">Blocked</span></div>
+            </div>
+        )
+    }
+    
     return (
         <>
             <div className="flex h-screen bg-slate-900 text-white">
@@ -198,6 +216,11 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <button onClick={() => setView('users')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${view === 'users' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
                             <Cog6ToothIcon className="w-6 h-6" />
                             <span>User Management</span>
+                        </button>
+                         <button onClick={() => setView('requests')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors relative ${view === 'requests' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
+                            <EnvelopeIcon className="w-6 h-6" />
+                            <span>Requests</span>
+                            {pendingRequests.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{pendingRequests.length}</span>}
                         </button>
                         <button onClick={() => setView('groups')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${view === 'groups' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
                             <UsersIcon className="w-6 h-6" />
@@ -231,12 +254,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             </div>
                                         </div>
                                         <div className="space-y-3 text-sm text-slate-300 flex-grow mb-4">
-                                            <p><strong className="text-slate-400">Bio:</strong> {user.bio || 'N/A'}</p>
                                             <p><strong className="text-slate-400">Email:</strong> {user.email || 'N/A'}</p>
-                                            <p><strong className="text-slate-400">Phone:</strong> {user.phone || 'N/A'}</p>
-                                            <p><strong className="text-slate-400">Msg Limit:</strong> {user.messageLimit === undefined ? 'Unlimited' : user.messageLimit}</p>
                                         </div>
-                                        <UserStats userId={user.id} />
+                                        <UserConnections user={user} />
                                         <div className="mt-4 grid grid-cols-3 gap-2">
                                             <button onClick={() => openEditUserModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
                                             <button onClick={() => openPasswordModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><KeyIcon className="w-4 h-4" /> Pass</button>
@@ -245,6 +265,45 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     </div>
                                 ))}
                             </div>
+                        </div>
+                    )}
+
+                    {view === 'requests' && (
+                        <div>
+                             <h1 className="text-4xl font-bold mb-8 text-white">Connection Requests</h1>
+                             <div className="bg-slate-800 border border-slate-700 rounded-2xl">
+                                <table className="w-full text-left">
+                                    <thead className="border-b border-slate-700 text-sm text-slate-400">
+                                        <tr>
+                                            <th className="p-4">From</th>
+                                            <th className="p-4">To</th>
+                                            <th className="p-4">Date</th>
+                                            <th className="p-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pendingRequests.length > 0 ? pendingRequests.map(req => {
+                                            const fromUser = users.find(u => u.id === req.fromUserId);
+                                            const toUser = users.find(u => u.id === req.toUserId);
+                                            return (
+                                                <tr key={req.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                                                    <td className="p-4 font-semibold">{fromUser?.username || 'Unknown'}</td>
+                                                    <td className="p-4 font-semibold">{toUser?.username || 'Unknown'}</td>
+                                                    <td className="p-4 text-slate-400 text-sm">{new Date(req.requestedAt).toLocaleDateString()}</td>
+                                                    <td className="p-4 text-right space-x-2">
+                                                        <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.REJECTED)} className="px-3 py-1.5 text-xs bg-red-800/50 hover:bg-red-700/50 text-red-300 rounded font-semibold">Deny</button>
+                                                        <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.ACCEPTED)} className="px-3 py-1.5 text-xs bg-green-800/50 hover:bg-green-700/50 text-green-300 rounded font-semibold">Approve</button>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        }) : (
+                                            <tr>
+                                                <td colSpan={4} className="text-center p-8 text-slate-500">No pending requests.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                             </div>
                         </div>
                     )}
                     

@@ -1,14 +1,14 @@
-
-import { User, Chat, Message, ChatType } from '../types';
+import { User, Chat, Message, ChatType, Connection, ConnectionStatus } from '../types';
 
 const DB_NAME = 'bakko-db';
-const DB_VERSION = 1;
+const DB_VERSION = 2; // Incremented version for schema change
 
 // Object store names
 const USERS_STORE = 'users';
 const CHATS_STORE = 'chats';
 const MESSAGES_STORE = 'messages';
 const SESSION_STORE = 'session';
+const CONNECTIONS_STORE = 'connections'; // New store
 
 interface SessionState {
     currentUserId: string | null;
@@ -56,6 +56,12 @@ class Database {
                 }
                 if (!db.objectStoreNames.contains(SESSION_STORE)) {
                     db.createObjectStore(SESSION_STORE, { keyPath: 'key' });
+                }
+                if (!db.objectStoreNames.contains(CONNECTIONS_STORE)) {
+                    const connectionsStore = db.createObjectStore(CONNECTIONS_STORE, { keyPath: 'id' });
+                    connectionsStore.createIndex('by-from-to', ['fromUserId', 'toUserId'], { unique: true });
+                    connectionsStore.createIndex('by-to-user', 'toUserId', { unique: false });
+                    connectionsStore.createIndex('by-status', 'status', { unique: false });
                 }
             };
         });
@@ -120,6 +126,12 @@ class Database {
         return promisifyRequest(db.transaction(MESSAGES_STORE, 'readonly').objectStore(MESSAGES_STORE).getAll());
     };
     
+    getConnections = async (): Promise<Connection[]> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        return promisifyRequest(db.transaction(CONNECTIONS_STORE, 'readonly').objectStore(CONNECTIONS_STORE).getAll());
+    };
+
     isUserLoggedIn = (): boolean => !!this.sessionState.currentUserId;
     
     getCurrentUser = async (): Promise<User | null> => {
@@ -329,6 +341,56 @@ class Database {
         return user;
     }
 
+    // --- Connection Methods ---
+    addConnection = async (fromUserId: string, toUserId: string): Promise<Connection | null> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction(CONNECTIONS_STORE, 'readwrite');
+        const store = tx.objectStore(CONNECTIONS_STORE);
+        const index = store.index('by-from-to');
+
+        // Check if a connection already exists in either direction
+        const existing1 = await promisifyRequest(index.get([fromUserId, toUserId]));
+        const existing2 = await promisifyRequest(index.get([toUserId, fromUserId]));
+        if (existing1 || existing2) {
+            console.log("Connection already exists or is pending.");
+            return null;
+        }
+
+        const newConnection: Connection = {
+            id: `conn-${Date.now()}`,
+            fromUserId,
+            toUserId,
+            status: ConnectionStatus.PENDING,
+            requestedAt: Date.now(),
+            updatedAt: Date.now(),
+        };
+
+        await promisifyRequest(store.add(newConnection));
+        return newConnection;
+    };
+
+    updateConnection = async (connectionId: string, status: ConnectionStatus): Promise<Connection | null> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction(CONNECTIONS_STORE, 'readwrite');
+        const store = tx.objectStore(CONNECTIONS_STORE);
+        const connection = await promisifyRequest(store.get(connectionId));
+        if (!connection) return null;
+
+        connection.status = status;
+        connection.updatedAt = Date.now();
+        await promisifyRequest(store.put(connection));
+        return connection;
+    }
+    
+    deleteConnection = async (connectionId: string): Promise<void> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction(CONNECTIONS_STORE, 'readwrite');
+        await promisifyRequest(tx.objectStore(CONNECTIONS_STORE).delete(connectionId));
+    };
+
     // --- Admin Methods ---
     updateUserProfile = async (userId: string, profileData: { avatar?: string, bio?: string, email?: string, phone?: string, messageLimit?: number }): Promise<User | null> => {
         await this.isInitialized;
@@ -391,12 +453,21 @@ class Database {
     deleteUser = async (userId: string): Promise<void> => {
         await this.isInitialized;
         const db = await this.dbPromise;
-        const tx = db.transaction([USERS_STORE, CHATS_STORE, MESSAGES_STORE], 'readwrite');
+        const tx = db.transaction([USERS_STORE, CHATS_STORE, MESSAGES_STORE, CONNECTIONS_STORE], 'readwrite');
         const usersStore = tx.objectStore(USERS_STORE);
         const chatsStore = tx.objectStore(CHATS_STORE);
         const messagesStore = tx.objectStore(MESSAGES_STORE);
+        const connectionsStore = tx.objectStore(CONNECTIONS_STORE);
 
         usersStore.delete(userId);
+        
+        // Clean up connections
+        const allConnections = await promisifyRequest(connectionsStore.getAll());
+        for (const conn of allConnections) {
+            if (conn.fromUserId === userId || conn.toUserId === userId) {
+                connectionsStore.delete(conn.id);
+            }
+        }
         
         const allChats = await promisifyRequest(chatsStore.getAll());
         const allMessages = await promisifyRequest(messagesStore.getAll());

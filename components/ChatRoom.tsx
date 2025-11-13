@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { Chat, Message, User } from '../types';
-import { ChatType } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon } from './icons';
+import type { Chat, Message, User, Connection } from '../types';
+import { ChatType, ConnectionStatus } from '../types';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db } from '../utils/db';
 
@@ -11,6 +10,7 @@ interface ChatRoomProps {
   users: User[];
   chats: Chat[];
   messages: Message[];
+  connections: Connection[];
   loggedInUsers: User[];
   onSendMessage: (chatId: string, text: string) => Promise<void>;
   onCreateChat: (targetUser: User) => Promise<Chat>;
@@ -18,6 +18,8 @@ interface ChatRoomProps {
   onLogout: () => Promise<void>;
   onSwitchUser: (userId: string) => Promise<void>;
   onLogin: (user: User) => Promise<void>;
+  onSendRequest: (toUserId: string) => Promise<void>;
+  onUpdateConnection: (connectionId: string, status: ConnectionStatus) => Promise<void>;
 }
 
 // --- Helper Functions ---
@@ -83,7 +85,8 @@ const AddAccountModal: React.FC<{
 };
 
 // --- Main Component ---
-const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin }) => {
+const ChatRoom: React.FC<ChatRoomProps> = (props) => {
+  const { currentUser, users, chats, messages, connections, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection } = props;
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
@@ -92,6 +95,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
   const accountSwitcherRef = useRef<HTMLDivElement>(null);
+  const notificationsRef = useRef<HTMLDivElement>(null);
 
   // Group Creation Modal State
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
@@ -100,9 +104,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [unlockedGroupIds, setUnlockedGroupIds] = useState<Set<string>>(new Set());
   
-  // Account Switcher State
+  // Account & Notification Switcher State
   const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false);
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+
+  const incomingRequests = useMemo(() => {
+      return connections.filter(c => c.toUserId === currentUser.id && c.status === ConnectionStatus.PENDING);
+  }, [connections, currentUser.id]);
 
   const activeChat = useMemo(() => chats.find(c => c.id === activeChatId), [activeChatId, chats]);
   const activeChatMessages = useMemo(() => messages.filter(m => m.chatId === activeChatId).sort((a,b) => a.timestamp - b.timestamp), [activeChatId, messages]);
@@ -124,11 +133,14 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
     setIsOtherUserTyping(false);
   }, [activeChatId]);
   
-  // Click outside handler for account switcher dropdown
+  // Click outside handler for dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
         if (accountSwitcherRef.current && !accountSwitcherRef.current.contains(event.target as Node)) {
             setIsAccountSwitcherOpen(false);
+        }
+        if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+            setIsNotificationsOpen(false);
         }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -203,10 +215,12 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
   };
   
   const handleUserSearchClick = async (user: User) => {
-      if(user.id === currentUser.id) return;
-      const newChat = await onCreateChat(user);
-      setActiveChatId(newChat.id);
-      setSearchQuery('');
+      const connection = connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === user.id) || (c.fromUserId === user.id && c.toUserId === currentUser.id));
+      if (connection && connection.status === ConnectionStatus.ACCEPTED) {
+          const chat = await onCreateChat(user);
+          setActiveChatId(chat.id);
+          setSearchQuery('');
+      }
   }
 
   const handleSelectChat = (chatId: string) => {
@@ -259,24 +273,65 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
         prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
     );
   };
+  
+  const handleBlockUser = () => {
+      if (!otherUserInDM) return;
+      if (window.confirm(`Are you sure you want to block ${otherUserInDM.username}? You will not be able to send or receive messages.`)) {
+          const connection = connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === otherUserInDM.id) || (c.fromUserId === otherUserInDM.id && c.toUserId === currentUser.id));
+          if (connection) {
+              onUpdateConnection(connection.id, ConnectionStatus.BLOCKED);
+              setActiveChatId(null);
+          }
+      }
+  }
 
   const filteredUsers = useMemo(() => {
     if (!searchQuery) return [];
-    return users.filter(user => user.username.toLowerCase().includes(searchQuery.toLowerCase()) && user.id !== currentUser.id);
+    return users.filter(user => user.username.toLowerCase().includes(searchQuery.toLowerCase()) && user.id !== currentUser.id && !user.isAdmin);
   }, [searchQuery, users, currentUser.id]);
 
   const sortedChats = useMemo(() => {
+    const acceptedUserIds = new Set(
+      connections
+        .filter(c => c.status === ConnectionStatus.ACCEPTED && (c.fromUserId === currentUser.id || c.toUserId === currentUser.id))
+        .flatMap(c => [c.fromUserId, c.toUserId])
+    );
+
     return chats
-      .filter(chat => chat.members.includes(currentUser.id))
+      .filter(chat => {
+          if (chat.type === ChatType.GROUP) return chat.members.includes(currentUser.id);
+          const otherUserId = chat.members.find(id => id !== currentUser.id);
+          return otherUserId && acceptedUserIds.has(otherUserId);
+      })
       .sort((a, b) => {
         const lastMessageA = messages.filter(m => m.chatId === a.id).sort((x, y) => y.timestamp - x.timestamp)[0];
         const lastMessageB = messages.filter(m => m.chatId === b.id).sort((x, y) => y.timestamp - x.timestamp)[0];
         return (lastMessageB?.timestamp || 0) - (lastMessageA?.timestamp || 0);
       });
-  }, [chats, messages, currentUser.id]);
+  }, [chats, messages, currentUser.id, connections]);
 
   const showChatList = !activeChatId || window.innerWidth >= 768;
   const showChatWindow = activeChatId;
+
+  const renderSearchUserActions = (user: User) => {
+    const connection = connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === user.id) || (c.fromUserId === user.id && c.toUserId === currentUser.id));
+
+    if (!connection) {
+        return <button onClick={() => onSendRequest(user.id)} className="ml-auto bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded-full font-semibold">Send Request</button>
+    }
+
+    switch(connection.status) {
+        case ConnectionStatus.PENDING:
+            return <span className="ml-auto text-xs text-slate-400">Request Sent</span>
+        case ConnectionStatus.ACCEPTED:
+            return <button onClick={() => handleUserSearchClick(user)} className="ml-auto bg-green-600 hover:bg-green-500 text-white text-xs px-3 py-1 rounded-full font-semibold">Message</button>
+        case ConnectionStatus.BLOCKED:
+            return <span className="ml-auto text-xs text-red-400">Blocked</span>
+        default:
+             return <button onClick={() => onSendRequest(user.id)} className="ml-auto bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded-full font-semibold">Send Request</button>
+    }
+  }
+
 
   return (
     <>
@@ -361,6 +416,36 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
             )}
           </div>
           <div className="flex items-center gap-1 pl-2">
+              <div className="relative" ref={notificationsRef}>
+                  <button onClick={() => setIsNotificationsOpen(p => !p)} title="Notifications" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors">
+                      <BellIcon className="w-6 h-6" />
+                      {incomingRequests.length > 0 && <span className="absolute top-1 right-1 block h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-slate-800"></span>}
+                  </button>
+                  {isNotificationsOpen && (
+                      <div className="absolute top-full right-0 mt-2 w-72 bg-slate-700/80 backdrop-blur-md border border-slate-600 rounded-lg shadow-2xl z-20 p-2">
+                          <h3 className="text-sm font-semibold p-2">Connection Requests</h3>
+                          {incomingRequests.length > 0 ? (
+                            <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
+                              {incomingRequests.map(req => {
+                                  const fromUser = users.find(u => u.id === req.fromUserId);
+                                  return (
+                                      <div key={req.id} className="p-2 rounded-md hover:bg-slate-600/50">
+                                          <div className="flex items-center gap-2 mb-2">
+                                              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold flex-shrink-0">{fromUser?.avatar}</div>
+                                              <p className="text-sm font-semibold truncate">{fromUser?.username}</p>
+                                          </div>
+                                          <div className="flex justify-end gap-2">
+                                              <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.REJECTED)} className="px-3 py-1 text-xs bg-slate-600 hover:bg-slate-500 rounded font-semibold">Decline</button>
+                                              <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.ACCEPTED)} className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 rounded font-semibold">Accept</button>
+                                          </div>
+                                      </div>
+                                  )
+                              })}
+                            </div>
+                          ) : <p className="p-4 text-center text-sm text-slate-400">No new requests.</p>}
+                      </div>
+                  )}
+              </div>
               <button onClick={() => setIsCreatingGroup(true)} title="Create Group" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors">
                   <PlusCircleIcon className="w-6 h-6" />
               </button>
@@ -384,12 +469,13 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
             <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-slate-700 rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto custom-scrollbar">
                 {filteredUsers.length > 0 ? (
                     filteredUsers.map(user => (
-                        <div key={user.id} onClick={() => handleUserSearchClick(user)} className="flex items-center gap-3 p-2 rounded-lg cursor-pointer hover:bg-blue-600">
+                        <div key={user.id} className="flex items-center gap-3 p-2 rounded-lg">
                              <div className="relative flex-shrink-0">
                                 <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold">{user.avatar}</div>
                                 <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-700 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
                             </div>
-                             <span className="font-semibold truncate">{user.username}</span>
+                             <span className="font-semibold truncate flex-grow">{user.username}</span>
+                             {renderSearchUserActions(user)}
                         </div>
                     ))
                 ) : <div className="p-2 text-center text-slate-400">No users found.</div>}
@@ -431,7 +517,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
           ) : (
             <div className="p-6 text-center text-slate-400">
                 <p>No chats yet.</p>
-                <p className="text-sm">Use the search bar to find users and start a conversation.</p>
+                <p className="text-sm">Connect with users to start a conversation.</p>
             </div>
           )}
         </div>
@@ -471,6 +557,11 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
                     </div>
                     {otherUserInDM?.bio && <p className="text-xs text-slate-400 truncate">{otherUserInDM.bio}</p>}
                 </div>
+                 {otherUserInDM && (
+                    <button onClick={handleBlockUser} title={`Block ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-full transition-colors ml-auto">
+                        <BanIcon className="w-6 h-6" />
+                    </button>
+                 )}
             </header>
             
             {/* Messages */}

@@ -130,3 +130,22 @@ export const ChevronDownIcon: React.FC<{ className?: string }> = ({ className = 
     <path fillRule="evenodd" d="M12.53 16.28a.75.75 0 01-1.06 0l-7.5-7.5a.75.75 0 011.06-1.06L12 14.69l6.97-6.97a.75.75 0 111.06 1.06l-7.5 7.5z" clipRule="evenodd" />
   </svg>
 );
+
+export const BellIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path fillRule="evenodd" d="M12 2.25c-2.429 0-4.66.93-6.342 2.503a.75.75 0 00-1.06 1.06c1.391 1.391 2.16 3.243 2.16 5.187v.198a8.232 8.232 0 01-3.262 6.348.75.75 0 101.06 1.06 9.732 9.732 0 003.442-4.985h.01a9.75 9.75 0 0011.964 0h.009a9.733 9.733 0 003.442 4.985.75.75 0 101.06-1.06 8.232 8.232 0 01-3.262-6.348v-.198c0-1.944.769-3.796 2.16-5.187a.75.75 0 00-1.06-1.06C16.66 3.18 14.43 2.25 12 2.25zM12.75 21a2.25 2.25 0 01-4.5 0h4.5z" clipRule="evenodd" />
+    </svg>
+);
+
+export const BanIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M12 2.25a9.75 9.75 0 100 19.5 9.75 9.75 0 000-19.5zM4.755 16.365A7.751 7.751 0 0112 4.25a7.75 7.75 0 017.245 12.115l-14.49-14.49zM19.245 7.635A7.751 7.751 0 0112 19.75a7.75 7.75 0 01-7.245-12.115l14.49 14.49z" />
+    </svg>
+);
+
+export const EnvelopeIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M1.5 8.67v8.58a3 3 0 003 3h15a3 3 0 003-3V8.67l-8.928 5.493a3 3 0 01-3.144 0L1.5 8.67z" />
+        <path d="M22.5 6.908V6.75a3 3 0 00-3-3h-15a3 3 0 00-3 3v.158l9.714 5.978a1.5 1.5 0 001.572 0L22.5 6.908z" />
+    </svg>
+);

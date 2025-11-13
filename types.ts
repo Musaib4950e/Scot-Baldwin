@@ -36,3 +36,19 @@ export interface Chat {
   creatorId?: string; // User ID of the group creator
   password?: string; // Optional password for the group
 }
+
+export enum ConnectionStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+  REJECTED = 'rejected',
+  BLOCKED = 'blocked',
+}
+
+export interface Connection {
+  id: string;
+  fromUserId: string;
+  toUserId: string;
+  status: ConnectionStatus;
+  requestedAt: number;
+  updatedAt: number;
+}

@@ -1,6 +1,5 @@
-
 import React, { useState, useReducer, useEffect } from 'react';
-import { User, Chat, Message } from './types';
+import { User, Chat, Message, Connection, ConnectionStatus } from './types';
 import GroupLocker from './components/GroupLocker';
 import ChatRoom from './components/ChatRoom';
 import AdminPanel from './components/AdminPanel';
@@ -32,22 +31,25 @@ const App: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
-    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData] = await Promise.all([
+    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData] = await Promise.all([
         db.getUsers(),
         db.getChats(),
         db.getMessages(),
         db.getCurrentUser(),
         db.getLoggedInUsers(),
+        db.getConnections(),
     ]);
     setUsers(usersData);
     setChats(chatsData);
     setMessages(messagesData);
     setCurrentUser(currentUserData);
     setLoggedInUsers(loggedInUsersData);
+    setConnections(connectionsData);
     setIsLoading(false);
   };
 
@@ -143,6 +145,31 @@ const App: React.FC = () => {
     setMessages(await db.getMessages());
   };
 
+  // --- Connection Handlers ---
+  const handleSendRequest = async (toUserId: string) => {
+      if (!currentUser) return;
+      await db.addConnection(currentUser.id, toUserId);
+      setConnections(await db.getConnections());
+  };
+
+  const handleUpdateConnection = async (connectionId: string, status: ConnectionStatus) => {
+      const updatedConnection = await db.updateConnection(connectionId, status);
+      if (updatedConnection && status === ConnectionStatus.ACCEPTED) {
+          const user1 = users.find(u => u.id === updatedConnection.fromUserId);
+          const user2 = users.find(u => u.id === updatedConnection.toUserId);
+          if (user1 && user2) {
+              await db.findOrCreateDM(user1, user2);
+              setChats(await db.getChats());
+          }
+      }
+      setConnections(await db.getConnections());
+  };
+
+  const handleDeleteConnection = async (connectionId: string) => {
+      await db.deleteConnection(connectionId);
+      setConnections(await db.getConnections());
+  };
+
   if (isLoading) {
     return (
         <div className="bg-slate-900 text-white min-h-screen w-full flex flex-col items-center justify-center">
@@ -162,6 +189,7 @@ const App: React.FC = () => {
             users={users}
             chats={chats}
             messages={messages}
+            connections={connections}
             onLogout={handleLogout}
             onUpdateUserProfile={handleUpdateUserProfile}
             onResetUserPassword={handleResetUserPassword}
@@ -169,6 +197,8 @@ const App: React.FC = () => {
             onUpdateGroupMembers={handleUpdateGroupMembers}
             onDeleteUser={handleDeleteUser}
             onDeleteGroup={handleDeleteGroup}
+            onUpdateConnection={handleUpdateConnection}
+            onDeleteConnection={handleDeleteConnection}
           />
         ) : (
           <ChatRoom
@@ -176,6 +206,7 @@ const App: React.FC = () => {
             users={users}
             chats={chats}
             messages={messages}
+            connections={connections}
             loggedInUsers={loggedInUsers}
             onSendMessage={handleSendMessage}
             onCreateChat={handleCreateChat}
@@ -183,6 +214,8 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             onSwitchUser={handleSwitchUser}
             onLogin={handleLogin}
+            onSendRequest={handleSendRequest}
+            onUpdateConnection={handleUpdateConnection}
           />
         )
       ) : (
