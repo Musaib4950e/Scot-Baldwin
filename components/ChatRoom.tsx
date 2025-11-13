@@ -297,8 +297,11 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         .flatMap(c => [c.fromUserId, c.toUserId])
     );
 
-    return chats
+    const announcementChat = chats.find(c => c.id === 'chat-announcements-global' && c.members.includes(currentUser.id));
+
+    const otherChats = chats
       .filter(chat => {
+          if (chat.id === 'chat-announcements-global') return false; // Exclude announcement chat from this filter
           if (chat.type === ChatType.GROUP) return chat.members.includes(currentUser.id);
           const otherUserId = chat.members.find(id => id !== currentUser.id);
           return otherUserId && acceptedUserIds.has(otherUserId);
@@ -308,6 +311,8 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         const lastMessageB = messages.filter(m => m.chatId === b.id).sort((x, y) => y.timestamp - x.timestamp)[0];
         return (lastMessageB?.timestamp || 0) - (lastMessageA?.timestamp || 0);
       });
+      
+      return announcementChat ? [announcementChat, ...otherChats] : otherChats;
   }, [chats, messages, currentUser.id, connections]);
 
   const showChatList = !activeChatId || window.innerWidth >= 768;
@@ -498,7 +503,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 >
                   <div className="relative flex-shrink-0">
                     <div className="w-12 h-12 rounded-full bg-blue-500 flex items-center justify-center text-2xl font-bold">
-                        {chat.type === ChatType.GROUP ? <UsersIcon className="w-7 h-7" /> : (otherUser ? otherUser.avatar : <UserCircleIcon className="w-7 h-7"/>) }
+                        {chat.id === 'chat-announcements-global' ? '📢' : (chat.type === ChatType.GROUP ? <UsersIcon className="w-7 h-7" /> : (otherUser ? otherUser.avatar : <UserCircleIcon className="w-7 h-7"/>)) }
                     </div>
                     {otherUser && (
                         <span className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full ring-2 ring-slate-800 ${otherUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
@@ -534,7 +539,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 </button>
                <div className="relative flex-shrink-0">
                     <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold">
-                        {activeChat.type === ChatType.GROUP ? <UsersIcon className="w-6 h-6" /> : (otherUserInDM ? otherUserInDM.avatar : <UserCircleIcon className="w-6 h-6"/>)}
+                        {activeChat.id === 'chat-announcements-global' ? '📢' : (activeChat.type === ChatType.GROUP ? <UsersIcon className="w-6 h-6" /> : (otherUserInDM ? otherUserInDM.avatar : <UserCircleIcon className="w-6 h-6"/>))}
                     </div>
                     {otherUserInDM && (
                         <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-800 ${otherUserInDM.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
@@ -556,6 +561,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                         )}
                     </div>
                     {otherUserInDM?.bio && <p className="text-xs text-slate-400 truncate">{otherUserInDM.bio}</p>}
+                    {activeChat.id === 'chat-announcements-global' && <p className="text-xs text-slate-400">Important messages from the administrator.</p>}
                 </div>
                  {otherUserInDM && (
                     <button onClick={handleBlockUser} title={`Block ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700 rounded-full transition-colors ml-auto">
@@ -599,9 +605,9 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                   onChange={handleMessageInputChange}
                   placeholder="Type a message..."
                   className="w-full bg-slate-700 border border-slate-600 rounded-full py-3 pl-5 pr-16 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  disabled={isSending}
+                  disabled={isSending || activeChat.id === 'chat-announcements-global'}
                 />
-                <button type="submit" disabled={!messageInput.trim() || isSending} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-blue-600 text-white hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors">
+                <button type="submit" disabled={!messageInput.trim() || isSending || activeChat.id === 'chat-announcements-global'} className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 rounded-full bg-blue-600 text-white hover:bg-blue-500 disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors">
                   <PaperAirplaneIcon className="w-5 h-5" />
                 </button>
               </form>

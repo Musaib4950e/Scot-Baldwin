@@ -9,6 +9,8 @@ const CHATS_STORE = 'chats';
 const MESSAGES_STORE = 'messages';
 const SESSION_STORE = 'session';
 const CONNECTIONS_STORE = 'connections'; // New store
+const ANNOUNCEMENT_CHAT_ID = 'chat-announcements-global';
+
 
 interface SessionState {
     currentUserId: string | null;
@@ -69,6 +71,7 @@ class Database {
     
     private async initialize(): Promise<void> {
         await this.ensureAdminExists();
+        await this.ensureAnnouncementChatExists();
         await this.loadSession();
     }
 
@@ -91,6 +94,34 @@ class Database {
             getRequest.onsuccess = () => {
                 if (!getRequest.result) {
                     store.add(adminUser);
+                }
+            };
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => reject(tx.error);
+        });
+    }
+
+    private async ensureAnnouncementChatExists() {
+        const db = await this.dbPromise;
+        const tx = db.transaction([CHATS_STORE, USERS_STORE], 'readwrite');
+        const chatsStore = tx.objectStore(CHATS_STORE);
+        const getRequest = chatsStore.get(ANNOUNCEMENT_CHAT_ID);
+
+        return new Promise<void>((resolve, reject) => {
+             getRequest.onsuccess = async () => {
+                if (!getRequest.result) {
+                    const usersStore = tx.objectStore(USERS_STORE);
+                    const allUsers = await promisifyRequest(usersStore.getAll());
+                    const allUserIds = allUsers.map(u => u.id);
+
+                    const announcementChat: Chat = {
+                        id: ANNOUNCEMENT_CHAT_ID,
+                        type: ChatType.GROUP,
+                        name: '📢 Announcements',
+                        members: allUserIds,
+                        creatorId: 'user-admin-001',
+                    };
+                    chatsStore.add(announcementChat);
                 }
             };
             tx.oncomplete = () => resolve();
@@ -164,8 +195,9 @@ class Database {
 
     createUser = async ({ username, password, instagramUsername }: { username: string, password: string, instagramUsername?: string }): Promise<User | null> => {
         await this.isInitialized;
-        const existingUsers = await this.getUsers();
-        if (existingUsers.some(u => u.username.toLowerCase() === username.toLowerCase().trim())) {
+        const db = await this.dbPromise;
+        const users = await this.getUsers();
+        if (users.some(u => u.username.toLowerCase() === username.toLowerCase().trim())) {
           return null; // Username already exists
         }
 
@@ -179,9 +211,17 @@ class Database {
           isAdmin: false,
         };
         
-        const db = await this.dbPromise;
-        const tx = db.transaction(USERS_STORE, 'readwrite');
-        await promisifyRequest(tx.objectStore(USERS_STORE).add(newUser));
+        const userTx = db.transaction(USERS_STORE, 'readwrite');
+        await promisifyRequest(userTx.objectStore(USERS_STORE).add(newUser));
+
+        const chatTx = db.transaction(CHATS_STORE, 'readwrite');
+        const chatStore = chatTx.objectStore(CHATS_STORE);
+        const announcementChat = await promisifyRequest(chatStore.get(ANNOUNCEMENT_CHAT_ID));
+        if (announcementChat) {
+            announcementChat.members.push(newUser.id);
+            await promisifyRequest(chatStore.put(announcementChat));
+        }
+
         return newUser;
     }
 
@@ -255,6 +295,7 @@ class Database {
             authorId,
             text,
             timestamp: Date.now(),
+            type: 'user',
         };
         const db = await this.dbPromise;
         const tx = db.transaction(MESSAGES_STORE, 'readwrite');
@@ -392,6 +433,50 @@ class Database {
     };
 
     // --- Admin Methods ---
+    addBroadcastAnnouncement = async (text: string, adminId: string): Promise<Message> => {
+        await this.isInitialized;
+        const newMessage: Message = {
+            id: `msg-${Date.now()}`,
+            chatId: ANNOUNCEMENT_CHAT_ID,
+            authorId: adminId,
+            text,
+            timestamp: Date.now(),
+            type: 'announcement',
+        };
+        const db = await this.dbPromise;
+        const tx = db.transaction(MESSAGES_STORE, 'readwrite');
+        await promisifyRequest(tx.objectStore(MESSAGES_STORE).add(newMessage));
+        return newMessage;
+    };
+
+    adminForceConnectionStatus = async (fromUserId: string, toUserId: string, status: ConnectionStatus): Promise<Connection | null> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction(CONNECTIONS_STORE, 'readwrite');
+        const store = tx.objectStore(CONNECTIONS_STORE);
+        const index = store.index('by-from-to');
+
+        let connection = await promisifyRequest(index.get([fromUserId, toUserId])) || await promisifyRequest(index.get([toUserId, fromUserId]));
+
+        if (connection) {
+            connection.status = status;
+            connection.updatedAt = Date.now();
+            await promisifyRequest(store.put(connection));
+            return connection;
+        } else {
+            const newConnection: Connection = {
+                id: `conn-${Date.now()}`,
+                fromUserId,
+                toUserId,
+                status: status,
+                requestedAt: Date.now(),
+                updatedAt: Date.now(),
+            };
+            await promisifyRequest(store.add(newConnection));
+            return newConnection;
+        }
+    };
+
     updateUserProfile = async (userId: string, profileData: { avatar?: string, bio?: string, email?: string, phone?: string, messageLimit?: number }): Promise<User | null> => {
         await this.isInitialized;
         const db = await this.dbPromise;
@@ -475,9 +560,9 @@ class Database {
         for (const chat of allChats) {
             if (chat.members.includes(userId)) {
                 const updatedMembers = chat.members.filter(id => id !== userId);
-                if (updatedMembers.length < (chat.type === ChatType.DM ? 2 : 1)) {
-                    chatsStore.delete(chat.id);
-                    // Also delete messages from this chat
+                if (chat.type === ChatType.DM && updatedMembers.length < 2) {
+                     chatsStore.delete(chat.id);
+                     // Also delete messages from this chat
                     const messagesInChat = allMessages.filter(m => m.chatId === chat.id);
                     for (const msg of messagesInChat) {
                         messagesStore.delete(msg.id);

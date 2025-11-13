@@ -149,3 +149,16 @@ export const EnvelopeIcon: React.FC<{ className?: string }> = ({ className = "w-
         <path d="M22.5 6.908V6.75a3 3 0 00-3-3h-15a3 3 0 00-3 3v.158l9.714 5.978a1.5 1.5 0 001.572 0L22.5 6.908z" />
     </svg>
 );
+
+export const MegaphoneIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M11.137 2.253A2.25 2.25 0 009 3.75v.568c-3.134.36-5.25 3.167-5.25 6.432 0 3.265 2.116 6.072 5.25 6.432v.568a2.25 2.25 0 002.137 1.497 25.43 25.43 0 004.821-.628 2.25 2.25 0 001.606-3.412c-.287-.503-.534-1.018-.74-1.545A2.25 2.25 0 0016.5 12c0-1.12.754-2.063 1.81-2.222.185-.028.37-.044.557-.048a2.25 2.25 0 001.907-2.31c-.13-.795-.45-1.549-.9-2.235a2.25 2.25 0 00-2.023-1.185 24.59 24.59 0 00-5.714-.495z" />
+      <path fillRule="evenodd" d="M3 10.5a1.5 1.5 0 011.5-1.5h.75a1.5 1.5 0 011.5 1.5v3a1.5 1.5 0 01-1.5 1.5h-.75a1.5 1.5 0 01-1.5-1.5v-3z" clipRule="evenodd" />
+    </svg>
+);
+
+export const ChartBarIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M3 3v18h18V3H3zm8 16H5v-6h6v6zm0-8H5V5h6v6zm8 8h-6v-4h6v4zm0-6h-6V5h6v6z" />
+    </svg>
+);

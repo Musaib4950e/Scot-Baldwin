@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus } from '../types';
 import { db } from '../utils/db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 
@@ -20,35 +20,14 @@ interface AdminPanelProps {
     onDeleteGroup: (chatId: string) => Promise<void>;
     onUpdateConnection: (connectionId: string, status: ConnectionStatus) => Promise<void>;
     onDeleteConnection: (connectionId: string) => Promise<void>;
-}
-
-const UserStats: React.FC<{ userId: string }> = ({ userId }) => {
-    const [stats, setStats] = useState<{ sent: number; received: number } | null>(null);
-
-    useEffect(() => {
-        const fetchStats = async () => {
-            const userStats = await db.getMessageStatsForUser(userId);
-            setStats(userStats);
-        };
-        fetchStats();
-    }, [userId]);
-
-    if (stats === null) {
-        return <div className="border-t border-slate-700 pt-4 text-sm animate-pulse">Loading stats...</div>
-    }
-
-    return (
-        <div className="border-t border-slate-700 pt-4 flex justify-between items-center text-sm">
-            <span className="font-mono">Sent: {stats.sent}</span>
-            <span className="font-mono">Received: {stats.received}</span>
-        </div>
-    )
+    onBroadcastAnnouncement: (text: string) => Promise<void>;
+    onAdminForceConnectionStatus: (fromUserId: string, toUserId: string, status: ConnectionStatus) => Promise<void>;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
-    const { currentUser, users, chats, messages, connections, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection } = props;
+    const { currentUser, users, chats, messages, connections, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus } = props;
     
-    const [view, setView] = useState<'users' | 'groups' | 'requests'>('users');
+    const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests'>('dashboard');
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<Chat | null>(null);
     const [viewingGroupChat, setViewingGroupChat] = useState<Chat | null>(null);
@@ -60,17 +39,23 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // User form state
+    const [modalView, setModalView] = useState<'profile' | 'connections'>('profile');
     const [avatar, setAvatar] = useState('');
     const [bio, setBio] = useState('');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [messageLimit, setMessageLimit] = useState<number | undefined>(undefined);
     const [newPassword, setNewPassword] = useState('');
+    const [blockUsername, setBlockUsername] = useState('');
     
     // Group form state
     const [groupName, setGroupName] = useState('');
     const [groupPassword, setGroupPassword] = useState('');
     const [groupMembers, setGroupMembers] = useState<string[]>([]);
+    
+    // Broadcast state
+    const [broadcastMessage, setBroadcastMessage] = useState('');
+    const [isBroadcasting, setIsBroadcasting] = useState(false);
 
     const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
     
@@ -79,14 +64,73 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         return messages.filter(m => m.chatId === viewingGroupChat.id).sort((a,b) => a.timestamp - b.timestamp);
     }, [viewingGroupChat, messages]);
 
+    const stats = useMemo(() => {
+        const nonAdminUsers = users.filter(u => !u.isAdmin);
+        const nonAdminMessages = messages.filter(m => users.find(u => u.id === m.authorId && !u.isAdmin));
+        
+        const registrationsLast7Days = Array(7).fill(0);
+        const messagesLast7Days = Array(7).fill(0);
+        const dayLabels = Array(7).fill(0).map((_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - i);
+            return d.toLocaleDateString('en-US', { weekday: 'short' });
+        }).reverse();
+        
+        const today = new Date();
+        today.setHours(23, 59, 59, 999);
+        
+        for(let i=0; i<7; i++) {
+            const dayStart = new Date(today.getTime() - (i+1) * 24 * 60 * 60 * 1000 + 1);
+            const dayEnd = new Date(today.getTime() - i * 24 * 60 * 60 * 1000);
+            
+            nonAdminUsers.forEach(u => {
+                const regDate = parseInt(u.id.split('-')[1]);
+                if (regDate >= dayStart.getTime() && regDate <= dayEnd.getTime()) {
+                    registrationsLast7Days[6-i]++;
+                }
+            });
+            nonAdminMessages.forEach(m => {
+                if (m.timestamp >= dayStart.getTime() && m.timestamp <= dayEnd.getTime()) {
+                    messagesLast7Days[6-i]++;
+                }
+            });
+        }
+
+        const groupMessageCounts = messages.reduce((acc, msg) => {
+            const chat = chats.find(c => c.id === msg.chatId && c.type === ChatType.GROUP);
+            if(chat) {
+                acc[chat.id] = (acc[chat.id] || 0) + 1;
+            }
+            return acc;
+        }, {} as Record<string, number>);
+
+        const activeGroups = Object.entries(groupMessageCounts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([chatId, count]) => ({
+                name: chats.find(c => c.id === chatId)?.name || 'Unknown Group',
+                count
+            }));
+
+        return {
+            totalUsers: nonAdminUsers.length,
+            onlineUsers: nonAdminUsers.filter(u => u.online).length,
+            registrationsChart: { labels: dayLabels, data: registrationsLast7Days },
+            messagesChart: { labels: dayLabels, data: messagesLast7Days },
+            activeGroups,
+        };
+    }, [users, messages, chats]);
+
     // --- User Modal Functions ---
     const openEditUserModal = (user: User) => {
         setSelectedUser(user);
+        setModalView('profile');
         setAvatar(user.avatar);
         setBio(user.bio || '');
         setEmail(user.email || '');
         setPhone(user.phone || '');
-        setMessageLimit(user.messageLimit)
+        setMessageLimit(user.messageLimit);
+        setBlockUsername('');
         setIsEditUserModalOpen(true);
     };
 
@@ -117,6 +161,23 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             onDeleteUser(user.id);
         }
     };
+    
+    const handleAdminBlockUser = async () => {
+        if (!selectedUser || !blockUsername.trim()) return;
+        const targetUser = users.find(u => u.username.toLowerCase() === blockUsername.trim().toLowerCase());
+        if (!targetUser) {
+            alert('User not found.');
+            return;
+        }
+        if(targetUser.id === selectedUser.id) {
+            alert("Cannot block a user themselves.");
+            return;
+        }
+        setIsSubmitting(true);
+        await onAdminForceConnectionStatus(selectedUser.id, targetUser.id, ConnectionStatus.BLOCKED);
+        setBlockUsername('');
+        setIsSubmitting(false);
+    }
 
     // --- Group Modal Functions ---
     const openEditGroupModal = (group: Chat) => {
@@ -144,6 +205,15 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         }
     };
     
+    const handleBroadcast = async () => {
+        if (!broadcastMessage.trim()) return;
+        setIsBroadcasting(true);
+        await onBroadcastAnnouncement(broadcastMessage.trim());
+        setBroadcastMessage('');
+        setIsBroadcasting(false);
+        alert('Announcement sent to all users.');
+    };
+
     const toggleGroupMember = (userId: string) => {
         setGroupMembers(prev => 
             prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
@@ -184,20 +254,6 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
          )
     }
     
-    const UserConnections: React.FC<{user: User}> = ({ user }) => {
-        const followers = connections.filter(c => c.toUserId === user.id && c.status === ConnectionStatus.ACCEPTED).map(c => users.find(u => u.id === c.fromUserId));
-        const following = connections.filter(c => c.fromUserId === user.id && c.status === ConnectionStatus.ACCEPTED).map(c => users.find(u => u.id === c.toUserId));
-        const blocked = connections.filter(c => c.status === ConnectionStatus.BLOCKED && (c.fromUserId === user.id || c.toUserId === user.id));
-
-        return (
-            <div className="border-t border-slate-700 pt-4 flex justify-around text-center text-sm">
-                <div><span className="font-bold text-base block">{followers.length}</span><span className="text-slate-400">Followers</span></div>
-                <div><span className="font-bold text-base block">{following.length}</span><span className="text-slate-400">Following</span></div>
-                <div><span className="font-bold text-base block">{blocked.length}</span><span className="text-slate-400">Blocked</span></div>
-            </div>
-        )
-    }
-    
     return (
         <>
             <div className="flex h-screen bg-slate-900 text-white">
@@ -213,6 +269,10 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                     </div>
                     <nav className="flex-grow space-y-2">
+                         <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${view === 'dashboard' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
+                            <ChartBarIcon className="w-6 h-6" />
+                            <span>Dashboard</span>
+                        </button>
                         <button onClick={() => setView('users')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${view === 'users' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
                             <Cog6ToothIcon className="w-6 h-6" />
                             <span>User Management</span>
@@ -237,6 +297,76 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 
                 {/* --- Main Content --- */}
                 <main className="flex-1 p-6 md:p-8 overflow-y-auto custom-scrollbar">
+                    {view === 'dashboard' && (
+                        <div>
+                             <h1 className="text-4xl font-bold mb-8 text-white">Dashboard</h1>
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                    <h3 className="text-slate-400 text-sm font-semibold">Total Users</h3>
+                                    <p className="text-4xl font-bold text-white">{stats.totalUsers}</p>
+                                </div>
+                                 <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                    <h3 className="text-slate-400 text-sm font-semibold">Online Now</h3>
+                                    <p className="text-4xl font-bold text-green-400">{stats.onlineUsers}</p>
+                                </div>
+                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 col-span-1 md:col-span-2">
+                                    <h3 className="text-slate-300 font-semibold mb-2">Broadcast Announcement</h3>
+                                    <textarea value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} placeholder="Send a message to all users..." rows={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"></textarea>
+                                    <button onClick={handleBroadcast} disabled={!broadcastMessage.trim() || isBroadcasting} className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70 flex items-center justify-center gap-2">
+                                        <MegaphoneIcon className="w-5 h-5" />
+                                        {isBroadcasting ? 'Sending...' : 'Broadcast'}
+                                    </button>
+                                </div>
+                             </div>
+                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                    <h3 className="text-slate-300 font-semibold mb-4">Activity (Last 7 Days)</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div>
+                                            <h4 className="text-sm text-slate-400 mb-2">New Users</h4>
+                                            <div className="h-48 flex justify-between items-end gap-2 p-2 border border-slate-700 rounded-lg">
+                                                {stats.registrationsChart.data.map((val, i) => (
+                                                    <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 group">
+                                                         <span className="text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">{val}</span>
+                                                        <div className="w-full bg-blue-500/30 hover:bg-blue-500/50 rounded-t" style={{ height: `${val === 0 ? 2 : (val / Math.max(...stats.registrationsChart.data, 1)) * 100}%`}}></div>
+                                                        <span className="text-xs text-slate-500">{stats.registrationsChart.labels[i]}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                         <div>
+                                            <h4 className="text-sm text-slate-400 mb-2">Messages Sent</h4>
+                                            <div className="h-48 flex justify-between items-end gap-2 p-2 border border-slate-700 rounded-lg">
+                                                {stats.messagesChart.data.map((val, i) => (
+                                                    <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 group">
+                                                        <span className="text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">{val}</span>
+                                                        <div className="w-full bg-indigo-500/30 hover:bg-indigo-500/50 rounded-t" style={{ height: `${val === 0 ? 2 : (val / Math.max(...stats.messagesChart.data, 1)) * 100}%`}}></div>
+                                                        <span className="text-xs text-slate-500">{stats.messagesChart.labels[i]}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                     <h3 className="text-slate-300 font-semibold mb-4">Most Active Groups</h3>
+                                     <div className="space-y-3">
+                                        {stats.activeGroups.length > 0 ? stats.activeGroups.map(group => (
+                                            <div key={group.name}>
+                                                <div className="flex justify-between text-sm mb-1">
+                                                    <span className="font-semibold truncate">{group.name}</span>
+                                                    <span className="text-slate-400">{group.count} msgs</span>
+                                                </div>
+                                                 <div className="w-full bg-slate-700 rounded-full h-1.5">
+                                                    <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${(group.count / Math.max(stats.activeGroups[0].count, 1)) * 100}%`}}></div>
+                                                </div>
+                                            </div>
+                                        )) : <p className="text-center text-slate-500 pt-8">No group activity yet.</p>}
+                                     </div>
+                                </div>
+                             </div>
+                        </div>
+                    )}
                     {view === 'users' && (
                         <div>
                             <h1 className="text-4xl font-bold mb-8 text-white">User Management</h1>
@@ -255,8 +385,8 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         </div>
                                         <div className="space-y-3 text-sm text-slate-300 flex-grow mb-4">
                                             <p><strong className="text-slate-400">Email:</strong> {user.email || 'N/A'}</p>
+                                            <p><strong className="text-slate-400">User ID:</strong> <span className="font-mono text-xs">{user.id}</span></p>
                                         </div>
-                                        <UserConnections user={user} />
                                         <div className="mt-4 grid grid-cols-3 gap-2">
                                             <button onClick={() => openEditUserModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
                                             <button onClick={() => openPasswordModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><KeyIcon className="w-4 h-4" /> Pass</button>
@@ -311,7 +441,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                          <div>
                             <h1 className="text-4xl font-bold mb-8 text-white">Group Management</h1>
                              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                                {chats.filter(c => c.type === ChatType.GROUP).map(group => {
+                                {chats.filter(c => c.type === ChatType.GROUP && c.id !== 'chat-announcements-global').map(group => {
                                     const creator = users.find(u => u.id === group.creatorId);
                                     return (
                                         <div key={group.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col">
@@ -344,7 +474,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             {/* --- Modals --- */}
             {(isEditUserModalOpen || isPasswordModalOpen || isEditGroupModalOpen) && (
                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700/50 shadow-2xl flex flex-col">
+                    <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-lg border border-slate-700/50 shadow-2xl flex flex-col">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-white">
                                 {isEditUserModalOpen && `Edit ${selectedUser?.username}`}
@@ -354,31 +484,71 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <button onClick={closeAllModals} className="p-1 text-slate-400 hover:text-white"><XMarkIcon /></button>
                         </div>
                         
-                        {isEditUserModalOpen && (
-                            <div className="space-y-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Avatar (Emoji/Char)</label>
-                                    <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        {isEditUserModalOpen && selectedUser && (
+                            <div>
+                                <div className="border-b border-slate-700 mb-4">
+                                    <nav className="flex -mb-px">
+                                        <button onClick={() => setModalView('profile')} className={`px-4 py-2 text-sm font-medium border-b-2 ${modalView === 'profile' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}>Profile</button>
+                                        <button onClick={() => setModalView('connections')} className={`px-4 py-2 text-sm font-medium border-b-2 ${modalView === 'connections' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}>Connections</button>
+                                    </nav>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Bio</label>
-                                    <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Email Address</label>
-                                    <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number</label>
-                                    <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Daily Message Limit</label>
-                                    <input type="number" value={messageLimit === undefined ? '' : messageLimit} onChange={e => setMessageLimit(e.target.value === '' ? undefined : Number(e.target.value))} placeholder="Leave blank for unlimited" className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                                </div>
+                                {modalView === 'profile' ? (
+                                     <div className="space-y-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Avatar (Emoji/Char)</label>
+                                            <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Bio</label>
+                                            <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Email Address</label>
+                                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number</label>
+                                            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Daily Message Limit</label>
+                                            <input type="number" value={messageLimit === undefined ? '' : messageLimit} onChange={e => setMessageLimit(e.target.value === '' ? undefined : Number(e.target.value))} placeholder="Leave blank for unlimited" className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        <div className="max-h-60 overflow-y-auto custom-scrollbar border border-slate-600 rounded-lg p-2 space-y-1">
+                                            {connections.filter(c => c.fromUserId === selectedUser.id || c.toUserId === selectedUser.id).map(conn => {
+                                                const otherUserId = conn.fromUserId === selectedUser.id ? conn.toUserId : conn.fromUserId;
+                                                const otherUser = users.find(u => u.id === otherUserId);
+                                                return (
+                                                    <div key={conn.id} className="flex items-center justify-between p-2 rounded hover:bg-slate-700/50">
+                                                        <span className="font-semibold">{otherUser?.username || 'Unknown'}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={`text-xs px-2 py-0.5 rounded-full ${conn.status === 'blocked' ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-300'}`}>{conn.status}</span>
+                                                            {conn.status === 'blocked' ? 
+                                                                <button onClick={() => onUpdateConnection(conn.id, ConnectionStatus.ACCEPTED)} className="px-2 py-1 text-xs bg-green-700 hover:bg-green-600 rounded">Unblock</button>
+                                                                :
+                                                                <button onClick={() => onUpdateConnection(conn.id, ConnectionStatus.BLOCKED)} className="px-2 py-1 text-xs bg-red-700 hover:bg-red-600 rounded">Block</button>
+                                                            }
+                                                            <button onClick={() => onDeleteConnection(conn.id)} className="p-1 text-slate-400 hover:text-white"><TrashIcon className="w-4 h-4"/></button>
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                         <div>
+                                            <label className="block text-sm font-medium text-slate-300 mb-1">Force Block User</label>
+                                            <div className="flex gap-2">
+                                                <input type="text" value={blockUsername} onChange={e => setBlockUsername(e.target.value)} placeholder="Enter username to block" className="flex-grow bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                <button onClick={handleAdminBlockUser} disabled={isSubmitting} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold disabled:bg-slate-600">Block</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
                                 <div className="mt-6 flex justify-end gap-3">
                                     <button onClick={closeAllModals} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
-                                    <button onClick={handleProfileUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                                    {modalView === 'profile' && <button onClick={handleProfileUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>}
                                 </div>
                             </div>
                         )}

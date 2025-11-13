@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Message, User } from '../types';
+import { MegaphoneIcon } from './icons';
 
 interface ChatMessageProps {
   message: Message;
@@ -13,6 +14,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
   const formatTimestamp = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
+
+  if (message.type === 'announcement') {
+    return (
+        <div className="my-4 mx-auto max-w-2xl bg-slate-700/50 border border-slate-600 rounded-lg p-4 text-center">
+            <div className="flex items-center justify-center gap-2 mb-3">
+                <MegaphoneIcon className="w-6 h-6 text-blue-400" />
+                <h3 className="font-bold text-lg text-blue-300">Announcement</h3>
+            </div>
+            <p className="text-slate-200 whitespace-pre-wrap leading-relaxed">{message.text}</p>
+            <p className="text-xs text-slate-500 mt-3">{new Date(message.timestamp).toLocaleString()}</p>
+        </div>
+    );
+  }
 
   return (
     <div className={`flex items-end gap-3 ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>

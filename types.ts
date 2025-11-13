@@ -20,6 +20,7 @@ export interface Message {
   authorId: string;
   text: string;
   timestamp: number;
+  type?: 'user' | 'announcement';
 }
 
 export enum ChatType {

@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import type { User } from '../types';
 import { db } from '../utils/db';
 import { KeyIcon, InformationCircleIcon } from './icons';
-import { GoogleGenAI } from "@google/genai";
 
 interface GroupLockerProps {
   users: User[];
@@ -62,7 +61,6 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
   const [inputToken, setInputToken] = useState('');
   const [newPasswordForReset, setNewPasswordForReset] = useState('');
   const [resetError, setResetError] = useState('');
-  const [isGeneratingEmail, setIsGeneratingEmail] = useState(false);
   const [generatedEmailContent, setGeneratedEmailContent] = useState<string | null>(null);
 
 
@@ -118,25 +116,14 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
     const user = await db.generatePasswordRecoveryToken(recoveryEmail);
     if (user && user.recoveryToken) {
         setGeneratedToken(user.recoveryToken);
-        setIsGeneratingEmail(true);
         setMode('reset');
 
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            const prompt = `Write a professional and reassuring password recovery email for an application named "BAK -Ko". The user's username is "${user.username}". The email should clearly state that a password reset was requested and provide the following 6-digit recovery code: ${user.recoveryToken}. Mention that the code is valid for 10 minutes. The tone should be secure and trustworthy. The From address should be "BAK -Ko Security <noreply@bakko.app>". Format the output with a subject line, a "From" line, three dashes (---) to separate the header, and then the email body.`;
-            
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: prompt,
-            });
-            
-            setGeneratedEmailContent(response.text);
-        } catch (error) {
-            console.error("Error generating recovery email:", error);
-            setRecoveryError("Could not generate recovery email. Please use the code provided below.");
-        } finally {
-            setIsGeneratingEmail(false);
-        }
+        const emailSubject = "Password Recovery for BAK -Ko";
+        const emailFrom = "BAK -Ko Security <noreply@bakko.app>";
+        const emailBody = `Hello ${user.username},\n\nA password reset was requested for your account.\n\nUse the following 6-digit recovery code to reset your password:\n\n${user.recoveryToken}\n\nThis code is valid for 10 minutes.\n\nIf you did not request this, you can safely ignore this email.\n\nThanks,\nThe BAK -Ko Team`;
+        const emailContent = `Subject: ${emailSubject}\nFrom: ${emailFrom}\n---\n${emailBody}`;
+        
+        setGeneratedEmailContent(emailContent);
 
     } else {
         setRecoveryError('No account found with that email address. An email must be added to your profile by an admin.');
@@ -229,16 +216,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
         return (
           <>
             <h2 className="text-2xl font-bold text-white text-center mb-4">Reset Password</h2>
-            
-            {isGeneratingEmail && (
-                <div className="text-center text-sm bg-slate-700/50 p-3 rounded-lg border border-slate-600 mb-4">
-                    <p className="text-slate-300 animate-pulse">Sending recovery email...</p>
-                </div>
-            )}
-            
-            {generatedEmailContent && <EmailDisplay content={generatedEmailContent} />}
-            
-            {!isGeneratingEmail && !generatedEmailContent && (
+                       
+            {generatedEmailContent ? <EmailDisplay content={generatedEmailContent} /> : (
                  <div className="text-center text-sm bg-slate-700/50 p-3 rounded-lg border border-slate-600 mb-4">
                     <p className="text-red-300">{recoveryError || "An error occurred."}</p>
                     <p className="text-slate-200 mt-1">Your code is: <strong className="text-lg text-cyan-300 font-mono tracking-widest">{generatedToken}</strong></p>

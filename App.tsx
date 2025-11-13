@@ -169,6 +169,20 @@ const App: React.FC = () => {
       await db.deleteConnection(connectionId);
       setConnections(await db.getConnections());
   };
+  
+  // --- Admin Handlers ---
+  const handleBroadcastAnnouncement = async (text: string) => {
+    if (!currentUser || !currentUser.isAdmin) return;
+    await db.addBroadcastAnnouncement(text, currentUser.id);
+    setMessages(await db.getMessages());
+    // Potentially re-fetch chats if announcement chat wasn't there before
+    setChats(await db.getChats());
+  };
+  
+  const handleAdminForceConnectionStatus = async (fromUserId: string, toUserId: string, status: ConnectionStatus) => {
+    await db.adminForceConnectionStatus(fromUserId, toUserId, status);
+    setConnections(await db.getConnections());
+  };
 
   if (isLoading) {
     return (
@@ -199,6 +213,8 @@ const App: React.FC = () => {
             onDeleteGroup={handleDeleteGroup}
             onUpdateConnection={handleUpdateConnection}
             onDeleteConnection={handleDeleteConnection}
+            onBroadcastAnnouncement={handleBroadcastAnnouncement}
+            onAdminForceConnectionStatus={handleAdminForceConnectionStatus}
           />
         ) : (
           <ChatRoom
