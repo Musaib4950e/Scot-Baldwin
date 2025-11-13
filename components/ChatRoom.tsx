@@ -2,18 +2,22 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User } from '../types';
 import { ChatType } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon } from './icons';
 import ChatMessage from './ChatMessage';
+import { db } from '../utils/db';
 
 interface ChatRoomProps {
   currentUser: User;
   users: User[];
   chats: Chat[];
   messages: Message[];
+  loggedInUsers: User[];
   onSendMessage: (chatId: string, text: string) => Promise<void>;
   onCreateChat: (targetUser: User) => Promise<Chat>;
   onCreateGroupChat: (params: { memberIds: string[]; groupName: string; }) => Promise<Chat>;
   onLogout: () => Promise<void>;
+  onSwitchUser: (userId: string) => Promise<void>;
+  onLogin: (user: User) => Promise<void>;
 }
 
 // --- Helper Functions ---
@@ -26,8 +30,60 @@ const getChatDisplayName = (chat: Chat, currentUser: User, users: User[]): strin
   return otherUser?.username || 'Unknown User';
 };
 
+
+// --- Add Account Modal ---
+const AddAccountModal: React.FC<{
+    onClose: () => void;
+    onLoginSuccess: (user: User) => Promise<void>;
+}> = ({ onClose, onLoginSuccess }) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!username || !password) {
+            setError("Please enter username and password.");
+            return;
+        }
+        setIsSubmitting(true);
+        setError('');
+        const authenticatedUser = await db.authenticate(username, password);
+        if (authenticatedUser) {
+            await onLoginSuccess(authenticatedUser);
+            onClose();
+        } else {
+            setError("Invalid credentials. Please try again.");
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+             <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-sm border border-slate-700/50 shadow-2xl flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-bold text-white">Add Account</h2>
+                    <button onClick={onClose} className="p-1 text-slate-400 hover:text-white"><XMarkIcon /></button>
+                </div>
+                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"/>
+                    <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Password" className="bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none transition"/>
+                    {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+                    <div className="mt-4 flex justify-end gap-3">
+                         <button type="button" onClick={onClose} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
+                        <button type="submit" className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70 flex items-center justify-center" disabled={!username || !password || isSubmitting}>
+                            {isSubmitting ? 'Adding...' : 'Log In & Add'}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    );
+};
+
 // --- Main Component ---
-const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages, onSendMessage, onCreateChat, onCreateGroupChat, onLogout }) => {
+const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin }) => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
@@ -35,6 +91,7 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const typingTimeoutRef = useRef<number | null>(null);
+  const accountSwitcherRef = useRef<HTMLDivElement>(null);
 
   // Group Creation Modal State
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
@@ -42,6 +99,10 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [unlockedGroupIds, setUnlockedGroupIds] = useState<Set<string>>(new Set());
+  
+  // Account Switcher State
+  const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false);
+  const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
 
   const activeChat = useMemo(() => chats.find(c => c.id === activeChatId), [activeChatId, chats]);
   const activeChatMessages = useMemo(() => messages.filter(m => m.chatId === activeChatId).sort((a,b) => a.timestamp - b.timestamp), [activeChatId, messages]);
@@ -62,6 +123,19 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
   useEffect(() => {
     setIsOtherUserTyping(false);
   }, [activeChatId]);
+  
+  // Click outside handler for account switcher dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (accountSwitcherRef.current && !accountSwitcherRef.current.contains(event.target as Node)) {
+            setIsAccountSwitcherOpen(false);
+        }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Listen for typing events
   useEffect(() => {
@@ -168,6 +242,17 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
     // Switch to the new chat
     setActiveChatId(newChat.id);
   };
+  
+  const handleOpenAddAccount = () => {
+    setIsAccountSwitcherOpen(false);
+    setIsAddAccountModalOpen(true);
+  };
+  
+  const handleSwitchAccount = async (userId: string) => {
+    if (userId === currentUser.id) return;
+    setIsAccountSwitcherOpen(false);
+    await onSwitchUser(userId);
+  };
 
   const toggleUserSelection = (userId: string) => {
     setSelectedUserIds(prev =>
@@ -240,26 +325,46 @@ const ChatRoom: React.FC<ChatRoomProps> = ({ currentUser, users, chats, messages
             </div>
         </div>
       )}
+      {isAddAccountModalOpen && <AddAccountModal onClose={() => setIsAddAccountModalOpen(false)} onLoginSuccess={onLogin} />}
       <div className="h-screen flex bg-slate-800">
       {/* Sidebar - Chat List */}
       <aside className={`w-full md:w-1/3 lg:w-1/4 xl:w-1/5 flex flex-col bg-slate-800 border-r border-slate-700 transition-transform duration-300 ease-in-out ${showChatList ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:flex`}>
         {/* Sidebar Header */}
         <header className="p-4 border-b border-slate-700 flex justify-between items-center flex-shrink-0">
-          <div className="flex items-center gap-3 overflow-hidden">
-             <div className="relative flex-shrink-0">
-              <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold">{currentUser.avatar}</div>
-              <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-800 ${currentUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
-            </div>
-             <div className="flex-grow overflow-hidden">
-                <span className="font-semibold text-lg truncate block">{currentUser.username}</span>
-                {currentUser.bio && <span className="text-xs text-slate-400 truncate block">{currentUser.bio}</span>}
-             </div>
+          <div className="relative flex-grow" ref={accountSwitcherRef}>
+            <button onClick={() => setIsAccountSwitcherOpen(p => !p)} className="flex items-center gap-3 overflow-hidden w-full text-left p-2 -m-2 rounded-lg hover:bg-slate-700/50">
+              <div className="relative flex-shrink-0">
+                <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center text-xl font-bold">{currentUser.avatar}</div>
+                <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-800 ${currentUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
+              </div>
+              <div className="flex-grow overflow-hidden">
+                  <span className="font-semibold text-lg truncate block">{currentUser.username}</span>
+                  {currentUser.bio && <span className="text-xs text-slate-400 truncate block">{currentUser.bio}</span>}
+              </div>
+              <ChevronDownIcon className="w-5 h-5 text-slate-400 flex-shrink-0" />
+            </button>
+            {isAccountSwitcherOpen && (
+                <div className="absolute top-full mt-2 w-full max-w-xs bg-slate-700/80 backdrop-blur-md border border-slate-600 rounded-lg shadow-2xl z-20 p-2 space-y-1">
+                    {loggedInUsers.map(user => (
+                        <button key={user.id} onClick={() => handleSwitchAccount(user.id)} className="w-full flex items-center gap-3 p-2 rounded-md text-left hover:bg-blue-600 transition-colors">
+                            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-base font-bold flex-shrink-0">{user.avatar}</div>
+                            <span className="font-semibold truncate flex-grow">{user.username}</span>
+                            {user.id === currentUser.id && <CheckCircleIcon className="w-6 h-6 text-blue-400 flex-shrink-0" />}
+                        </button>
+                    ))}
+                    <div className="border-t border-slate-600 my-1 !mt-2 !mb-2"></div>
+                    <button onClick={handleOpenAddAccount} className="w-full flex items-center gap-3 p-2 rounded-md text-left text-slate-300 hover:bg-slate-600/50 transition-colors">
+                        <UserPlusIcon className="w-8 h-8 p-1 flex-shrink-0" />
+                        <span className="font-semibold">Add Account</span>
+                    </button>
+                </div>
+            )}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 pl-2">
               <button onClick={() => setIsCreatingGroup(true)} title="Create Group" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors">
                   <PlusCircleIcon className="w-6 h-6" />
               </button>
-              <button onClick={onLogout} title="Logout" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors">
+              <button onClick={onLogout} title="Logout All Accounts" className="p-2 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full transition-colors">
                 <ArrowLeftOnRectangleIcon className="w-6 h-6" />
               </button>
           </div>

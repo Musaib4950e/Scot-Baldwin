@@ -10,6 +10,11 @@ const CHATS_STORE = 'chats';
 const MESSAGES_STORE = 'messages';
 const SESSION_STORE = 'session';
 
+interface SessionState {
+    currentUserId: string | null;
+    loggedInUserIds: string[];
+}
+
 // Helper to promisify IDBRequest
 const promisifyRequest = <T>(request: IDBRequest<T>): Promise<T> => {
     return new Promise((resolve, reject) => {
@@ -23,8 +28,8 @@ const promisifyRequest = <T>(request: IDBRequest<T>): Promise<T> => {
 
 class Database {
     private dbPromise: Promise<IDBDatabase>;
-    private currentUserId: string | null = null;
     private isInitialized: Promise<void>;
+    private sessionState: SessionState = { currentUserId: null, loggedInUserIds: [] };
 
     constructor() {
         this.dbPromise = this.openDb();
@@ -91,8 +96,8 @@ class Database {
         const db = await this.dbPromise;
         const tx = db.transaction(SESSION_STORE, 'readonly');
         const store = tx.objectStore(SESSION_STORE);
-        const result = await promisifyRequest(store.get('currentUserId')).catch(() => null);
-        this.currentUserId = result ? result.value : null;
+        const result = await promisifyRequest(store.get('sessionState')).catch(() => null);
+        this.sessionState = result ? result.value : { currentUserId: null, loggedInUserIds: [] };
     }
 
     // --- Public API ---
@@ -115,14 +120,24 @@ class Database {
         return promisifyRequest(db.transaction(MESSAGES_STORE, 'readonly').objectStore(MESSAGES_STORE).getAll());
     };
     
-    isUserLoggedIn = (): boolean => !!this.currentUserId;
+    isUserLoggedIn = (): boolean => !!this.sessionState.currentUserId;
     
     getCurrentUser = async (): Promise<User | null> => {
         await this.isInitialized;
-        if (!this.currentUserId) return null;
+        if (!this.sessionState.currentUserId) return null;
         const db = await this.dbPromise;
         const tx = db.transaction(USERS_STORE, 'readonly');
-        return await promisifyRequest(tx.objectStore(USERS_STORE).get(this.currentUserId)) || null;
+        return await promisifyRequest(tx.objectStore(USERS_STORE).get(this.sessionState.currentUserId)) || null;
+    }
+
+    getLoggedInUsers = async (): Promise<User[]> => {
+        await this.isInitialized;
+        if (this.sessionState.loggedInUserIds.length === 0) return [];
+        const allUsers = await this.getUsers();
+        // Preserve order
+        return this.sessionState.loggedInUserIds
+            .map(id => allUsers.find(u => u.id === id))
+            .filter((u): u is User => !!u);
     }
 
     authenticate = async (username: string, password: string): Promise<User | null> => {
@@ -170,31 +185,54 @@ class Database {
         
         userToUpdate.online = true;
         usersStore.put(userToUpdate);
-        sessionStore.put({ key: 'currentUserId', value: user.id });
+        
+        if (!this.sessionState.loggedInUserIds.includes(user.id)) {
+            this.sessionState.loggedInUserIds.push(user.id);
+        }
+        this.sessionState.currentUserId = user.id;
+
+        sessionStore.put({ key: 'sessionState', value: this.sessionState });
 
         await new Promise(resolve => tx.oncomplete = resolve);
-        this.currentUserId = user.id;
         return userToUpdate;
     };
+
+    switchCurrentUser = async (userId: string): Promise<void> => {
+        await this.isInitialized;
+        if (!this.sessionState.loggedInUserIds.includes(userId)) {
+            console.error("Attempted to switch to a user who is not logged in.");
+            return;
+        }
+        
+        this.sessionState.currentUserId = userId;
+        
+        const db = await this.dbPromise;
+        const tx = db.transaction(SESSION_STORE, 'readwrite');
+        tx.objectStore(SESSION_STORE).put({ key: 'sessionState', value: this.sessionState });
+        await new Promise(resolve => tx.oncomplete = resolve);
+    }
     
     logout = async (): Promise<void> => {
         await this.isInitialized;
-        if (!this.currentUserId) return;
+        if (this.sessionState.loggedInUserIds.length === 0) return;
 
         const db = await this.dbPromise;
         const tx = db.transaction([USERS_STORE, SESSION_STORE], 'readwrite');
         const usersStore = tx.objectStore(USERS_STORE);
         const sessionStore = tx.objectStore(SESSION_STORE);
         
-        const userToUpdate = await promisifyRequest(usersStore.get(this.currentUserId));
-        if (userToUpdate) {
-            userToUpdate.online = false;
-            usersStore.put(userToUpdate);
+        for (const userId of this.sessionState.loggedInUserIds) {
+            const userToUpdate = await promisifyRequest(usersStore.get(userId));
+            if (userToUpdate) {
+                userToUpdate.online = false;
+                usersStore.put(userToUpdate);
+            }
         }
-        sessionStore.put({ key: 'currentUserId', value: null });
+        
+        this.sessionState = { currentUserId: null, loggedInUserIds: [] };
+        sessionStore.put({ key: 'sessionState', value: this.sessionState });
         
         await new Promise(resolve => tx.oncomplete = resolve);
-        this.currentUserId = null;
     };
 
     addMessage = async (chatId: string, authorId: string, text: string): Promise<Message> => {

@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import type { User } from '../types';
 import { db } from '../utils/db';
-import { KeyIcon } from './icons';
+import { KeyIcon, InformationCircleIcon } from './icons';
 import { GoogleGenAI } from "@google/genai";
 
 interface GroupLockerProps {
@@ -306,6 +306,13 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
           <p className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-green-400 to-teal-400">{activeUsers}</p>
           <p className="text-sm text-slate-400">Online Now</p>
         </div>
+      </div>
+
+      <div className="w-full max-w-sm bg-slate-700/50 border border-slate-600 rounded-lg p-3 text-center mb-6 flex items-center gap-3">
+        <InformationCircleIcon className="w-8 h-8 text-blue-400 flex-shrink-0" />
+        <p className="text-slate-400 text-sm text-left">
+          <strong>Please Note:</strong> This is a single-device experience. All data is stored locally in your browser and will not sync across other devices.
+        </p>
       </div>
 
       <div className="w-full max-w-sm bg-slate-800/50 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-8 shadow-2xl">

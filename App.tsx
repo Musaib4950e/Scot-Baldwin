@@ -33,18 +33,21 @@ const App: React.FC = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
-    const [usersData, chatsData, messagesData, currentUserData] = await Promise.all([
+    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData] = await Promise.all([
         db.getUsers(),
         db.getChats(),
         db.getMessages(),
         db.getCurrentUser(),
+        db.getLoggedInUsers(),
     ]);
     setUsers(usersData);
     setChats(chatsData);
     setMessages(messagesData);
     setCurrentUser(currentUserData);
+    setLoggedInUsers(loggedInUsersData);
     setIsLoading(false);
   };
 
@@ -70,12 +73,19 @@ const App: React.FC = () => {
     const loggedInUser = await db.login(user);
     setCurrentUser(loggedInUser);
     setUsers(await db.getUsers());
+    setLoggedInUsers(await db.getLoggedInUsers());
   };
   
   const handleLogout = async () => {
     await db.logout();
     setCurrentUser(null);
+    setLoggedInUsers([]);
     setUsers(await db.getUsers());
+  };
+
+  const handleSwitchUser = async (userId: string) => {
+    await db.switchCurrentUser(userId);
+    setCurrentUser(await db.getCurrentUser());
   };
 
   const handleSendMessage = async (chatId: string, text: string) => {
@@ -166,10 +176,13 @@ const App: React.FC = () => {
             users={users}
             chats={chats}
             messages={messages}
+            loggedInUsers={loggedInUsers}
             onSendMessage={handleSendMessage}
             onCreateChat={handleCreateChat}
             onCreateGroupChat={handleCreateGroupChat}
             onLogout={handleLogout}
+            onSwitchUser={handleSwitchUser}
+            onLogin={handleLogin}
           />
         )
       ) : (
