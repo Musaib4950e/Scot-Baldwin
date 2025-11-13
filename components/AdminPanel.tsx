@@ -1,6 +1,7 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus } from '../types';
-import { db } from '../utils/db';
+import { db } from './db';
 import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon } from './icons';
 import ChatMessage from './ChatMessage';
 

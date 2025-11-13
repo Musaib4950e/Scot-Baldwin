@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import type { User } from '../types';
-import { db } from '../utils/db';
+import { db } from './db';
 import { KeyIcon, InformationCircleIcon } from './icons';
 
 interface GroupLockerProps {

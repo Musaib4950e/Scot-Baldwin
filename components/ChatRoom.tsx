@@ -1,9 +1,10 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User, Connection } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
 import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon } from './icons';
 import ChatMessage from './ChatMessage';
-import { db } from '../utils/db';
+import { db } from './db';
 
 interface ChatRoomProps {
   currentUser: User;
