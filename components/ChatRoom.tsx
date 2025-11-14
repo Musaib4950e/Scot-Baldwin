@@ -15,7 +15,7 @@ interface ChatRoomProps {
   loggedInUsers: User[];
   onSendMessage: (chatId: string, text: string) => Promise<void>;
   onCreateChat: (targetUser: User) => Promise<Chat>;
-  onCreateGroupChat: (params: { memberIds: string[]; groupName: string; }) => Promise<Chat>;
+  onCreateGroupChat: (params: { memberIds: string[]; groupName: string; }) => Promise<void>;
   onLogout: () => Promise<void>;
   onSwitchUser: (userId: string) => Promise<void>;
   onLogin: (user: User) => Promise<void>;
@@ -970,3 +970,4 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
 };
 export default ChatRoom;
 // Health check comment
+// N

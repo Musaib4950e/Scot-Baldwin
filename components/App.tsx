@@ -1,9 +1,10 @@
+
 import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
 import GroupLocker from './GroupLocker';
 import ChatRoom from './ChatRoom';
-// FIX: Changed import to be a default import.
-import AdminPanel from './AdminPanel';
+// FIX: Changed to a named import as AdminPanel does not have a default export.
+import { AdminPanel } from './AdminPanel';
 import { db } from './db';
 
 interface CreateGroupChatParams {
@@ -111,11 +112,11 @@ const App: React.FC = () => {
     return newChat;
   };
 
-  const handleCreateGroupChat = async ({memberIds, groupName}: CreateGroupChatParams): Promise<Chat> => {
+  // FIX: Updated function to return Promise<void> to match the prop type in ChatRoom.
+  const handleCreateGroupChat = async ({memberIds, groupName}: CreateGroupChatParams): Promise<void> => {
       if (!currentUser) throw new Error("No current user");
-      const newChat = await db.createGroupChat(currentUser.id, memberIds, groupName);
+      await db.createGroupChat(currentUser.id, memberIds, groupName);
       setChats(await db.getChats());
-      return newChat;
   };
 
   const handleUpdateUserProfile = async ({ userId, avatar, bio, email, phone, messageLimit }: UpdateProfileParams) => {
@@ -360,3 +361,4 @@ const App: React.FC = () => {
 };
 
 export default App;
+// N
