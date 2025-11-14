@@ -1,13 +1,11 @@
 
 
-
 import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
 import GroupLocker from './GroupLocker';
 import ChatRoom from './ChatRoom';
-// FIX: Changed to a named import as AdminPanel does not have a default export.
 import { AdminPanel } from './AdminPanel';
-import { db } from './db';
+import { db_firebase as db } from './db';
 
 interface CreateGroupChatParams {
   memberIds: string[];
@@ -40,246 +38,163 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
-  const fetchData = async () => {
-    try {
-        const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
-            db.getUsers(),
-            db.getChats(),
-            db.getMessages(),
-            db.getCurrentUser(),
-            db.getLoggedInUsers(),
-            db.getConnections(),
-            db.getTransactions(),
-            db.getReports(),
-        ]);
-        setUsers(usersData);
-        setChats(chatsData);
-        setMessages(messagesData);
-        setCurrentUser(currentUserData);
-        setLoggedInUsers(loggedInUsersData);
-        setConnections(connectionsData);
-        setTransactions(transactionsData);
-        setReports(reportsData);
-    } catch (error) {
-        console.error("Failed to fetch data:", error);
-        // If there's an auth error (e.g., token expired), we might want to log the user out.
-        // For now, we'll just log the error.
-    }
-  };
-
   useEffect(() => {
-    fetchData(); // Fetch initial data
+    const unsubscribe = db.onAuthStateChanged(async (user) => {
+      setCurrentUser(user);
+      if (user) {
+        // Fetch initial data that doesn't need to be real-time
+        db.getChats(user.id).then(setChats);
+        // Other data can be fetched here as needed
+      } else {
+        // Reset states on logout
+        setChats([]);
+        setMessages([]);
+        setConnections([]);
+        setTransactions([]);
+        setReports([]);
+      }
+    });
 
-    // Set up polling to simulate real-time updates from the database
-    const pollInterval = setInterval(() => {
-        fetchData();
-    }, 2500); // Poll every 2.5 seconds for updates
-
-    return () => clearInterval(pollInterval); // Cleanup on unmount
+    return () => unsubscribe();
   }, []);
 
 
   const handleLogin = async (user: User) => {
-    const loggedInUser = await db.login(user);
-    setCurrentUser(loggedInUser);
-    setUsers(await db.getUsers());
-    setLoggedInUsers(await db.getLoggedInUsers());
+    // The onAuthStateChanged listener will handle setting the current user
   };
   
   const handleLogout = async () => {
     await db.logout();
-    setCurrentUser(null);
-    setLoggedInUsers([]);
-    setUsers(await db.getUsers());
   };
 
   const handleSwitchUser = async (userId: string) => {
-    await db.switchCurrentUser(userId);
-    setCurrentUser(await db.getCurrentUser());
+    // This functionality might need to be re-evaluated with Firebase's auth model
   };
 
   const handleSendMessage = async (chatId: string, text: string) => {
     if (!currentUser) return;
     await db.addMessage(chatId, currentUser.id, text);
-    setMessages(await db.getMessages());
   };
   
   const handleCreateChat = async (targetUser: User): Promise<Chat> => {
     if (!currentUser) throw new Error("No current user");
-    const newChat = await db.findOrCreateDM(currentUser, targetUser);
-    setChats(await db.getChats());
-    return newChat;
+    const newChat = await db.findOrCreateDM(currentUser.id, targetUser.id);
+    if(newChat) {
+      setChats(prevChats => [...prevChats, newChat]);
+      return newChat
+    }
+    throw new Error("Could not create chat");
   };
 
-  // FIX: Updated function to return Promise<void> to match the prop type in ChatRoom.
   const handleCreateGroupChat = async ({memberIds, groupName}: CreateGroupChatParams): Promise<void> => {
       if (!currentUser) throw new Error("No current user");
       await db.createGroupChat(currentUser.id, memberIds, groupName);
-      setChats(await db.getChats());
   };
 
   const handleUpdateUserProfile = async ({ userId, avatar, bio, email, phone, messageLimit }: UpdateProfileParams) => {
       await db.updateUserProfile(userId, { avatar, bio, email, phone, messageLimit });
-      const updatedUsers = await db.getUsers();
-      setUsers(updatedUsers);
-      if (currentUser && currentUser.id === userId) {
-          setCurrentUser(updatedUsers.find(u => u.id === userId) || null);
-      }
   };
 
-  const handleResetUserPassword = async (userId: string, newPassword: string) => {
-      await db.resetUserPassword(userId, newPassword);
-      setUsers(await db.getUsers());
+  const handleResetUserPassword = async (email: string) => {
+      await db.resetUserPassword(email);
   };
 
   const handleUpdateGroupDetails = async ({ chatId, name, password }: UpdateGroupDetailsParams) => {
     await db.updateGroupDetails(chatId, { name, password });
-    setChats(await db.getChats());
   };
 
   const handleUpdateGroupMembers = async (chatId: string, memberIds: string[]) => {
     await db.updateGroupMembers(chatId, memberIds);
-    setChats(await db.getChats());
   };
 
   const handleDeleteUser = async (userId: string) => {
-    await db.deleteUser(userId);
-    await fetchData();
+    // Deleting users is a sensitive operation, not directly implemented in the new db.ts
   };
 
   const handleDeleteGroup = async (chatId: string) => {
     await db.deleteGroup(chatId);
-    setChats(await db.getChats());
-    setMessages(await db.getMessages());
   };
 
   const handleDeleteUserChats = async (chatIds: string[]) => {
-    if (!currentUser || currentUser.isAdmin) return;
-    await db.deleteUserChats(chatIds);
-    await fetchData();
+    // This is a complex operation and would need a specific cloud function or batch write
   };
 
   const handleSendRequest = async (toUserId: string) => {
       if (!currentUser) return;
       await db.addConnection(currentUser.id, toUserId);
-      setConnections(await db.getConnections());
   };
 
   const handleUpdateConnection = async (connectionId: string, status: ConnectionStatus) => {
-      const updatedConnection = await db.updateConnection(connectionId, status);
-      if (updatedConnection && status === ConnectionStatus.ACCEPTED) {
-          const user1 = users.find(u => u.id === updatedConnection.fromUserId);
-          const user2 = users.find(u => u.id === updatedConnection.toUserId);
-          if (user1 && user2) {
-              await db.findOrCreateDM(user1, user2);
-              setChats(await db.getChats());
-          }
-      }
-      setConnections(await db.getConnections());
+      await db.updateConnection(connectionId, status);
   };
 
   const handleDeleteConnection = async (connectionId: string) => {
       await db.deleteConnection(connectionId);
-      setConnections(await db.getConnections());
   };
   
   const handleRequestVerification = async (userId: string) => {
-    await db.requestUserVerification(userId);
-    await fetchData();
+    // Not implemented in new db.ts
   };
 
   const handleAdminUpdateUserVerification = async (userId: string, verification: Partial<Verification>) => {
-    await db.adminUpdateUserVerification(userId, verification);
-    await fetchData();
+    // Not implemented in new db.ts
   };
 
   const handleBroadcastAnnouncement = async (text: string) => {
-    if (!currentUser || !currentUser.isAdmin) return;
-    await db.addBroadcastAnnouncement(text, currentUser.id);
-    setMessages(await db.getMessages());
-    setChats(await db.getChats());
+    // Not implemented in new db.ts
   };
   
   const handleAdminForceConnectionStatus = async (fromUserId: string, toUserId: string, status: ConnectionStatus) => {
-    await db.adminForceConnectionStatus(fromUserId, toUserId, status);
-    setConnections(await db.getConnections());
+    // Not implemented in new db.ts
   };
 
   // --- Wallet/Transaction Handlers ---
   const handleTransferFunds = async (toUserId: string, amount: number) => {
     if (!currentUser) return { success: false, message: "Not logged in" };
-    const toUser = users.find(u => u.id === toUserId);
-    if (!toUser) return { success: false, message: "Recipient not found" };
-    const result = await db.transferFunds(currentUser.id, toUserId, amount, `Transfer to ${toUser.username}`);
-    if (result.success) await fetchData();
-    return result;
+    try {
+      await db.transferFunds(currentUser.id, toUserId, amount, `Transfer`);
+      return { success: true, message: "Transfer successful" };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
   };
   
   const handleAdminGrantFunds = async (toUserId: string, amount: number) => {
-    const toUser = users.find(u => u.id === toUserId);
-    if (!toUser) return { success: false, message: "Recipient not found" };
-    const result = await db.adminGrantFunds(toUserId, amount, `Admin grant to ${toUser.username}`);
-    if (result.success) await fetchData();
-    return result;
+    // Not implemented in new db.ts
+    return { success: false, message: "Not implemented" };
   };
 
   const handlePurchaseVerification = async (badgeType: VerificationBadgeType, durationDays: number | 'permanent', cost: number) => {
-    if (!currentUser) return { success: false, message: "Not logged in" };
-    
-    const currentVerification = currentUser.verification;
-    let expiresAt: number | undefined;
-
-    if (durationDays === 'permanent') {
-        expiresAt = undefined;
-    } else {
-        // Stacking logic: if it's the same temporary badge, add time to the existing expiry.
-        const isStacking = currentVerification?.status === 'approved' &&
-                           currentVerification.badgeType === badgeType &&
-                           currentVerification.expiresAt &&
-                           currentVerification.expiresAt > Date.now();
-        
-        const baseTimestamp = isStacking ? currentVerification.expiresAt : Date.now();
-        expiresAt = baseTimestamp + durationDays * 24 * 60 * 60 * 1000;
-    }
-
-    const verification: Verification = {
-        status: 'approved',
-        badgeType,
-        expiresAt,
-    };
-    const description = `Purchased ${badgeType} badge (${durationDays === 'permanent' ? 'Permanent' : `${durationDays} Days`})`;
-    const result = await db.purchaseVerification(currentUser.id, cost, description, verification);
-    if (result.success) await fetchData();
-    return result;
+    // Not implemented in new db.ts
+    return { success: false, message: "Not implemented" };
   };
   
   const handleAdminUpdateUserFreezeStatus = async (userId: string, isFrozen: boolean, frozenUntil?: number) => {
     await db.adminUpdateUserFreezeStatus(userId, isFrozen, frozenUntil);
-    await fetchData();
   };
   
   const handlePurchaseCosmetic = async (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => {
     if (!currentUser) return { success: false, message: "Not logged in" };
-    const result = await db.purchaseCosmetic(currentUser.id, item);
-    if (result.success) await fetchData();
-    return result;
+    try {
+      await db.purchaseCosmetic(currentUser.id, item);
+      return { success: true, message: "Purchase successful" };
+    } catch (error: any) {
+      return { success: false, message: error.message };
+    }
   };
   
   const handleEquipCustomization = async (type: 'border' | 'nameColor', itemId: string | undefined) => {
       if (!currentUser) return;
       await db.equipCustomization(currentUser.id, type, itemId);
-      await fetchData();
   };
 
   const handleReportUser = async (reportedUserId: string, reason: string, chatId?: string) => {
     if (!currentUser) return;
     await db.addReport(currentUser.id, reportedUserId, reason, chatId);
-    await fetchData();
   };
 
   const handleUpdateReportStatus = async (reportId: string, status: Report['status']) => {
     await db.updateReportStatus(reportId, status);
-    setReports(await db.getReports());
   };
 
 
@@ -297,7 +212,7 @@ const App: React.FC = () => {
             reports={reports}
             onLogout={handleLogout}
             onUpdateUserProfile={handleUpdateUserProfile}
-            onResetUserPassword={handleResetUserPassword}
+            onResetUserPassword={() => currentUser.email && handleResetUserPassword(currentUser.email)}
             onUpdateGroupDetails={handleUpdateGroupDetails}
             onUpdateGroupMembers={handleUpdateGroupMembers}
             onDeleteUser={handleDeleteUser}
@@ -351,4 +266,3 @@ const App: React.FC = () => {
 };
 
 export default App;
-// N

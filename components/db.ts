@@ -1,109 +1,233 @@
 import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, Report } from '../types';
+import { db, auth } from './firebase'; // Import Firebase config
+import { 
+    doc, getDoc, setDoc, collection, addDoc, getDocs, updateDoc, deleteDoc, query, where, onSnapshot, serverTimestamp, arrayUnion, arrayRemove, writeBatch 
+} from "firebase/firestore";
+import { 
+    createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, sendPasswordResetEmail 
+} from "firebase/auth";
 
-// This file has been refactored to make API calls to a backend server.
-// Instead of storing data in memory, it now uses `fetch` to interact with
-// API endpoints (e.g., /api/users, /api/messages). This is the secure and
-// standard way to connect a frontend application to a database like Neon.
+// --- Firebase Helper Functions ---
 
-// --- API Request Helper ---
-const apiRequest = async <T>(method: string, endpoint: string, body?: any): Promise<T> => {
-  const options: RequestInit = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      // In a real app, you would include an authentication token here
-      // 'Authorization': `Bearer ${localStorage.getItem('token')}`
-    },
-  };
-  if (body) {
-    options.body = JSON.stringify(body);
-  }
-  
-  // The 'fetch' call assumes your backend is running on the same domain
-  // or you have a proxy set up.
-  const response = await fetch(endpoint, options);
+const getCollection = <T>(collectionName: string) => collection(db, collectionName);
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: `Request failed with status ${response.status}` }));
-    throw new Error(errorData.message || 'An unknown API error occurred');
-  }
-
-  // Handle responses with no content (e.g., DELETE, logout)
-  if (response.status === 204 || response.headers.get('Content-Length') === '0') {
-    return null as T;
-  }
-
-  return response.json();
+const getDocument = async <T>(collectionName: string, id: string): Promise<T | null> => {
+    const docRef = doc(db, collectionName, id);
+    const docSnap = await getDoc(docRef);
+    return docSnap.exists() ? { id: docSnap.id, ...docSnap.data() } as T : null;
 };
 
-export const db = {
-  // --- Read Operations (GET) ---
-  getUsers: () => apiRequest<User[]>('GET', '/api/users'),
-  getChats: () => apiRequest<Chat[]>('GET', '/api/chats'),
-  getMessages: () => apiRequest<Message[]>('GET', '/api/messages'),
-  getConnections: () => apiRequest<Connection[]>('GET', '/api/connections'),
-  getTransactions: () => apiRequest<Transaction[]>('GET', '/api/transactions'),
-  getReports: () => apiRequest<Report[]>('GET', '/api/reports'),
-  getCurrentUser: () => apiRequest<User | null>('GET', '/api/session/user'),
-  getLoggedInUsers: () => apiRequest<User[]>('GET', '/api/session/users'),
-  isUserLoggedIn: async (): Promise<boolean> => {
-    try {
-      const user = await db.getCurrentUser();
-      return !!user;
-    } catch {
-      return false;
-    }
+// --- Refactored DB object with Firebase --- 
+
+export const db_firebase = {
+
+  // --- Auth & User Management ---
+  
+  onAuthStateChanged: (callback: (user: User | null) => void) => {
+    return onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const user = await getDocument<User>('users', firebaseUser.uid);
+        callback(user);
+      } else {
+        callback(null);
+      }
+    });
   },
 
-  // --- Authentication & User Creation (POST) ---
-  authenticate: (username: string, password: string) => apiRequest<User | null>('POST', '/api/auth/login', { username, password }),
-  createUser: (params: { username: string, password: string, instagramUsername?: string }) => apiRequest<User | null>('POST', '/api/users', params),
-  login: (user: User) => apiRequest<User>('POST', '/api/session/login', { userId: user.id }),
-  logout: () => apiRequest<void>('POST', '/api/session/logout'),
+  authenticate: async (email: string, password: string) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    return getDocument<User>('users', userCredential.user.uid);
+  },
 
-  // --- Create Operations (POST) ---
-  addMessage: (chatId: string, authorId: string, text: string) => apiRequest<Message>('POST', '/api/messages', { chatId, authorId, text }),
-  findOrCreateDM: (user1: User, user2: User) => apiRequest<Chat>('POST', '/api/chats/dm', { user1Id: user1.id, user2Id: user2.id }),
-  createGroupChat: (creatorId: string, memberIds: string[], groupName: string) => apiRequest<Chat>('POST', '/api/chats/group', { creatorId, memberIds, groupName }),
-  addConnection: (fromUserId: string, toUserId: string) => apiRequest<void>('POST', '/api/connections', { fromUserId, toUserId }),
-  addBroadcastAnnouncement: (text: string, adminId: string) => apiRequest<void>('POST', '/api/admin/broadcast', { text, adminId }),
-  addReport: (reporterId: string, reportedUserId: string, reason: string, chatIdAtTimeOfReport?: string) => apiRequest<Report>('POST', '/api/reports', { reporterId, reportedUserId, reason, chatIdAtTimeOfReport }),
+  createUser: async (params: { email: string, username: string, password: string, instagramUsername?: string }) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, params.email, params.password);
+    const { user } = userCredential;
+    await updateProfile(user, { displayName: params.username });
+
+    const newUser: Omit<User, 'id'> = {
+        username: params.username,
+        email: params.email,
+        instagramUsername: params.instagramUsername || '',
+        createdAt: serverTimestamp(),
+        isFrozen: false,
+        wallet: 500, // Starting balance
+        customization: {},
+        inventory: { borders: [], nameColors: [] },
+        verification: { status: 'unverified' },
+        lastOnline: serverTimestamp(),
+    };
+
+    await setDoc(doc(db, 'users', user.uid), newUser);
+    return { id: user.uid, ...newUser } as User;
+  },
   
-  // --- Update Operations (PUT/PATCH) ---
-  switchCurrentUser: (userId: string) => apiRequest<void>('PUT', '/api/session/switch', { userId }),
-  updateUserProfile: (userId: string, updates: Partial<User>) => apiRequest<void>('PUT', `/api/users/${userId}/profile`, updates),
-  resetUserPassword: (userId: string, newPassword: string) => apiRequest<void>('PUT', `/api/users/${userId}/password`, { newPassword }),
-  updateGroupDetails: (chatId: string, details: { name: string; password?: string }) => apiRequest<void>('PUT', `/api/chats/${chatId}/details`, details),
-  updateGroupMembers: (chatId: string, memberIds: string[]) => apiRequest<void>('PUT', `/api/chats/${chatId}/members`, { memberIds }),
-  updateConnection: (connectionId: string, status: ConnectionStatus) => apiRequest<Connection | null>('PUT', `/api/connections/${connectionId}`, { status }),
-  requestUserVerification: (userId: string) => apiRequest<void>('PUT', `/api/users/${userId}/verification/request`, {}),
-  adminUpdateUserVerification: (userId: string, verificationDetails: Partial<Verification>) => apiRequest<void>('PUT', `/api/admin/users/${userId}/verification`, verificationDetails),
-  adminForceConnectionStatus: (fromUserId: string, toUserId: string, status: ConnectionStatus) => apiRequest<void>('PUT', '/api/admin/connections', { fromUserId, toUserId, status }),
-  adminUpdateUserFreezeStatus: (userId: string, isFrozen: boolean, frozenUntil?: number) => apiRequest<void>('PUT', `/api/admin/users/${userId}/freeze`, { isFrozen, frozenUntil }),
-  equipCustomization: (userId: string, type: 'border' | 'nameColor', itemId: string | undefined) => apiRequest<void>('PUT', `/api/users/${userId}/customization`, { type, itemId }),
-  updateReportStatus: (reportId: string, status: Report['status']) => apiRequest<void>('PUT', `/api/reports/${reportId}`, { status }),
+  logout: () => signOut(auth),
 
-  // --- Financial Operations (POST) ---
-  transferFunds: (fromUserId: string, toUserId: string, amount: number, description: string) => apiRequest<{success: boolean, message: string}>('POST', '/api/wallet/transfer', { fromUserId, toUserId, amount, description }),
-  adminGrantFunds: (toUserId: string, amount: number, description: string) => apiRequest<{success: boolean, message: string}>('POST', '/api/admin/wallet/grant', { toUserId, amount, description }),
-  purchaseVerification: (userId: string, cost: number, description: string, verification: Verification) => apiRequest<{success: boolean, message: string}>('POST', '/api/marketplace/purchase/verification', { userId, cost, description, verification }),
-  purchaseCosmetic: (userId: string, item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => apiRequest<{success: boolean, message: string}>('POST', '/api/marketplace/purchase/cosmetic', { userId, item }),
+  getCurrentUser: async (): Promise<User | null> => {
+    const firebaseUser = auth.currentUser;
+    if (!firebaseUser) return null;
+    return getDocument<User>('users', firebaseUser.uid);
+  },
 
-  // --- Password Recovery (POST) ---
-  generatePasswordRecoveryToken: (email: string) => apiRequest<User | null>('POST', '/api/auth/recover', { email }),
-  resetPasswordWithToken: (token: string, newPassword: string) => apiRequest<User | null>('POST', '/api/auth/reset', { token, newPassword }),
+  isUserLoggedIn: (): boolean => {
+    return !!auth.currentUser;
+  },
+
+  updateUserProfile: (userId: string, updates: Partial<User>) => {
+      const userRef = doc(db, "users", userId);
+      return updateDoc(userRef, updates);
+  },
+
+  resetUserPassword: (email: string) => {
+      return sendPasswordResetEmail(auth, email);
+  },
+
+  // --- Chat & Message Operations ---
+
+  getChats: (userId: string) => {
+      const chatsRef = collection(db, 'chats');
+      const q = query(chatsRef, where('memberIds', 'array-contains', userId));
+      return getDocs(q).then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Chat)));
+  },
+
+  getMessages: (chatId: string, onMessagesUpdate: (messages: Message[]) => void) => {
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    const q = query(messagesRef);
+
+    return onSnapshot(q, (snapshot) => {
+      const messages = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Message));
+      onMessagesUpdate(messages);
+    });
+  },
   
-  // --- Delete Operations (DELETE) ---
-  deleteUser: (userId: string) => apiRequest<void>('DELETE', `/api/users/${userId}`),
-  deleteGroup: (chatId: string) => apiRequest<void>('DELETE', `/api/chats/${chatId}`),
-  deleteUserChats: (chatIds: string[]) => apiRequest<void>('DELETE', '/api/chats', { chatIds }),
-  deleteConnection: (connectionId: string) => apiRequest<void>('DELETE', `/api/connections/${connectionId}`),
+  addMessage: (chatId: string, authorId: string, text: string) => {
+    const messagesRef = collection(db, 'chats', chatId, 'messages');
+    return addDoc(messagesRef, {
+        authorId,
+        text,
+        timestamp: serverTimestamp(),
+    });
+  },
+
+  findOrCreateDM: async (user1Id: string, user2Id: string) => {
+    const chatsRef = collection(db, 'chats');
+    const q = query(chatsRef, 
+        where('type', '==', ChatType.DM),
+        where('memberIds', 'array-contains', user1Id)
+    );
+
+    const snapshot = await getDocs(q);
+    const existingChat = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() } as Chat))
+        .find(chat => chat.memberIds.includes(user2Id));
+
+    if (existingChat) return existingChat;
+
+    const newChatRef = await addDoc(chatsRef, {
+        type: ChatType.DM,
+        memberIds: [user1Id, user2Id],
+        createdAt: serverTimestamp(),
+    });
+
+    return getDocument<Chat>('chats', newChatRef.id);
+  },
+
+  createGroupChat: (creatorId: string, memberIds: string[], groupName: string, password?: string) => {
+      const chatsRef = collection(db, 'chats');
+      return addDoc(chatsRef, {
+          name: groupName,
+          type: password ? ChatType.PRIVATE_GROUP : ChatType.PUBLIC_GROUP,
+          creatorId,
+          memberIds: [creatorId, ...memberIds],
+          ...(password && { password }),
+          createdAt: serverTimestamp(),
+      });
+  },
+
+  deleteGroup: (chatId: string) => deleteDoc(doc(db, 'chats', chatId)),
+
+  updateGroupDetails: (chatId: string, details: { name: string; password?: string }) => {
+      return updateDoc(doc(db, 'chats', chatId), details);
+  },
+
+  updateGroupMembers: (chatId: string, memberIds: string[]) => {
+      return updateDoc(doc(db, 'chats', chatId), { memberIds });
+  },
+
+  // --- Connections ---
+
+  addConnection: (fromUserId: string, toUserId: string) => {
+      const connectionsRef = collection(db, 'connections');
+      return addDoc(connectionsRef, {
+          from: fromUserId,
+          to: toUserId,
+          status: 'pending',
+          createdAt: serverTimestamp()
+      });
+  },
+
+  updateConnection: (connectionId: string, status: ConnectionStatus) => {
+      return updateDoc(doc(db, 'connections', connectionId), { status });
+  },
+
+  deleteConnection: (connectionId: string) => deleteDoc(doc(db, 'connections', connectionId)),
+
+  // --- Admin & Reports ---
+
+  addReport: (reporterId: string, reportedUserId: string, reason: string, chatIdAtTimeOfReport?: string) => {
+      const reportsRef = collection(db, 'reports');
+      return addDoc(reportsRef, { reporterId, reportedUserId, reason, chatIdAtTimeOfReport, status: 'pending', createdAt: serverTimestamp() });
+  },
+
+  updateReportStatus: (reportId: string, status: Report['status']) => {
+      return updateDoc(doc(db, 'reports', reportId), { status });
+  },
+
+  adminUpdateUserFreezeStatus: (userId: string, isFrozen: boolean, frozenUntil?: number) => {
+      return updateDoc(doc(db, 'users', userId), { isFrozen, frozenUntil: frozenUntil || null });
+  },
+
+  // --- Wallet & Marketplace ---
+
+  transferFunds: async (fromUserId: string, toUserId: string, amount: number, description: string) => {
+      const fromUserRef = doc(db, "users", fromUserId);
+      const toUserRef = doc(db, "users", toUserId);
+      const batch = writeBatch(db);
+      const fromUser = await getDocument<User>('users', fromUserId);
+      
+      if (!fromUser || fromUser.wallet < amount) {
+        throw new Error("Insufficient funds");
+      }
+
+      batch.update(fromUserRef, { wallet: fromUser.wallet - amount });
+      batch.update(toUserRef, { wallet: arrayUnion(amount) });
+      await batch.commit();
+      // Not implemented: adding transaction to a separate collection for history
+  },
+
+   purchaseCosmetic: async (userId: string, item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => {
+    const userRef = doc(db, 'users', userId);
+    const user = await getDocument<User>('users', userId);
+
+    if (!user || user.wallet < item.price) {
+      throw new Error("Insufficient funds");
+    }
+
+    await updateDoc(userRef, {
+      wallet: user.wallet - item.price,
+      [`inventory.${item.type}s`]: arrayUnion(item.id)
+    });
+  },
+
+  equipCustomization: (userId: string, type: 'border' | 'nameColor', itemId: string | undefined) => {
+    return updateDoc(doc(db, 'users', userId), { [`customization.${type}`]: itemId });
+  }
+
 };
 
 
 // --- STATIC DATA ---
-// In a full application, this would also be fetched from the backend via an API endpoint
-// (e.g., GET /api/marketplace/items), but for now, we'll keep it static on the client.
+// This can remain static or be moved to Firestore and fetched if it needs to be dynamic.
 export const MARKETPLACE_ITEMS = {
     borders: [
         { id: 'border-neon-purple', name: 'Neon Purple Glow', price: 150, style: { padding: '2px', boxShadow: '0 0 10px #a855f7, 0 0 15px #a855f7', border: '2px solid #a855f780' } },
@@ -118,5 +242,3 @@ export const MARKETPLACE_ITEMS = {
         { id: 'color-gold-text', name: 'Gold Standard', price: 400, style: { color: '#f59e0b' } },
     ]
 };
-// Health check comment
-// N
