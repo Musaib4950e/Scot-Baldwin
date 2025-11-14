@@ -515,7 +515,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
               <div className="flex-grow overflow-hidden">
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-lg truncate block">{currentUser.username}</span>
-                    {currentUser.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+                    {currentUser.isVerified && <CheckBadgeIcon className={`w-5 h-5 ${currentUser.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
                   </div>
                   {currentUser.bio && <span className="text-xs text-slate-400 truncate block">{currentUser.bio}</span>}
               </div>
@@ -528,7 +528,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-base font-bold flex-shrink-0">{user.avatar}</div>
                              <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
                                 <span className="font-semibold truncate">{user.username}</span>
-                                {user.isVerified && <CheckBadgeIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                                {user.isVerified && <CheckBadgeIcon className={`w-4 h-4 ${user.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
                             </div>
                             {user.id === currentUser.id && <CheckCircleIcon className="w-6 h-6 text-cyan-400 flex-shrink-0" />}
                         </button>
@@ -606,7 +606,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                             </div>
                             <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
                                 <span className="font-semibold truncate">{user.username}</span>
-                                {user.isVerified && <CheckBadgeIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                                {user.isVerified && <CheckBadgeIcon className={`w-4 h-4 ${user.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
                             </div>
                              {renderSearchUserActions(user)}
                         </div>
@@ -641,7 +641,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                   <div className="flex-grow overflow-hidden">
                     <div className="flex items-center gap-2">
                         <h3 className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</h3>
-                        {otherUser?.isVerified && <CheckBadgeIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                        {otherUser?.isVerified && <CheckBadgeIcon className={`w-4 h-4 ${otherUser.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
                         {chat.password && <LockClosedIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />}
                     </div>
                     <p className="text-sm text-slate-400 truncate">{lastMessage?.text || 'No messages yet'}</p>
@@ -678,7 +678,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 <div className='flex-grow overflow-hidden'>
                     <div className="flex items-center gap-2">
                         <h2 className="text-xl font-bold truncate">{getChatDisplayName(activeChat, currentUser, users)}</h2>
-                        {otherUserInDM?.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+                        {otherUserInDM?.isVerified && <CheckBadgeIcon className={`w-5 h-5 ${otherUserInDM.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
                         {otherUserInDM?.instagramUsername && (
                             <a 
                                 href={`https://instagram.com/${otherUserInDM.instagramUsername}`} 

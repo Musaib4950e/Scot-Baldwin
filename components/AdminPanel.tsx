@@ -270,7 +270,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <div className="overflow-hidden">
                             <div className="flex items-center gap-1.5">
                                 <h2 className="font-bold text-lg truncate">{currentUser.username}</h2>
-                                {currentUser.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+                                {currentUser.isVerified && <CheckBadgeIcon className="w-5 h-5 text-red-400 flex-shrink-0" />}
                             </div>
                             <p className="text-sm text-blue-300 flex items-center gap-1.5"><ShieldCheckIcon className="w-4 h-4" /> Administrator</p>
                         </div>
@@ -390,7 +390,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             <div className="overflow-hidden">
                                                 <div className="flex items-center gap-1.5">
                                                     <p className="font-bold text-lg truncate">{user.username}</p>
-                                                    {user.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+                                                    {user.isVerified && <CheckBadgeIcon className={`w-5 h-5 ${user.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
                                                 </div>
                                                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${user.online ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}>
                                                     <span className={`h-1.5 w-1.5 rounded-full ${user.online ? 'bg-green-500' : 'bg-slate-500'}`}></span>

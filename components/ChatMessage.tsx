@@ -61,7 +61,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
          {isGroupChat && !isCurrentUser && (
             <div className="flex items-center gap-1.5 mb-1 ml-3">
               <p className="text-xs text-cyan-300 font-semibold">{author.username}</p>
-              {author.isVerified && <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-400" />}
+              {author.isVerified && <CheckBadgeIcon className={`w-3.5 h-3.5 ${author.isAdmin ? 'text-red-400' : 'text-blue-400'}`} />}
             </div>
          )}
         <div
