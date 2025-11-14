@@ -1,9 +1,40 @@
 
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report } from '../types';
 import { db, MARKETPLACE_ITEMS } from './db';
 import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon, ExclamationTriangleIcon } from './icons';
 import ChatMessage from './ChatMessage';
+
+// Generic Modal Component
+const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.ReactNode; maxWidth?: string; }> = ({ isOpen, onClose, children, maxWidth = 'max-w-lg' }) => {
+    const [isVisible, setIsVisible] = useState(isOpen);
+    useEffect(() => {
+        if (isOpen) {
+            setIsVisible(true);
+        } else {
+            const timer = setTimeout(() => setIsVisible(false), 300);
+            return () => clearTimeout(timer);
+        }
+    }, [isOpen]);
+
+    if (!isVisible) return null;
+
+    return (
+        <div 
+            className={`fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}
+            onClick={onClose}
+        >
+             <div 
+                className={`bg-slate-900/50 backdrop-blur-2xl rounded-3xl p-6 w-full ${maxWidth} border border-white/10 shadow-2xl shadow-black/40 flex flex-col transition-all duration-300 ${isOpen ? 'scale-100 opacity-100' : 'scale-95 opacity-0'}`}
+                onClick={e => e.stopPropagation()}
+             >
+                {children}
+            </div>
+        </div>
+    );
+};
+
 
 // Helper component for the visual badge selector
 const BadgeOption: React.FC<{ badge: VerificationBadgeType | 'none' }> = ({ badge }) => {
@@ -690,9 +721,36 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     )}
                 </main>
             </div>
-            {/* Modals */}
+            {/* --- Modals --- */}
+            <Modal isOpen={isEditUserModalOpen} onClose={closeAllModals}>
+                {selectedUser && (
+                    <div>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold">Edit {selectedUser.username}</h2>
+                            <button onClick={closeAllModals} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10"><XMarkIcon /></button>
+                        </div>
+                        <div className="border-b border-white/10 mb-4"><nav className="flex -mb-px space-x-2"><button onClick={() => setModalView('profile')} className={`px-3 py-2 text-sm font-medium border-b-2 ${modalView === 'profile' ? 'border-blue-400 text-white' : 'border-transparent text-slate-400'}`}>Profile</button><button onClick={() => setModalView('connections')} className={`px-3 py-2 text-sm font-medium border-b-2 ${modalView === 'connections' ? 'border-blue-400 text-white' : 'border-transparent text-slate-400'}`}>Connections</button><button onClick={() => setModalView('wallet')} className={`px-3 py-2 text-sm font-medium border-b-2 ${modalView === 'wallet' ? 'border-blue-400 text-white' : 'border-transparent text-slate-400'}`}>Wallet</button></nav></div>
+                        {modalView === 'profile' && (<div className="space-y-4"><input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} placeholder="Avatar" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="Bio" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><input type="text" value={phone} onChange={e => setPhone(e.target.value)} placeholder="Phone" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><input type="number" value={messageLimit ?? ''} onChange={e => setMessageLimit(e.target.value === '' ? undefined : Number(e.target.value))} placeholder="Daily Message Limit (optional)" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-4 py-2 bg-white/10 rounded-lg">Cancel</button><button onClick={handleProfileUpdate} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 rounded-lg">{isSubmitting ? 'Saving...' : 'Save'}</button></div></div>)}
+                        {modalView === 'connections' && (<div className="space-y-4"><div><h3 className="font-semibold mb-2">Block a user</h3><div className="flex gap-2"><input type="text" value={blockUsername} onChange={e => setBlockUsername(e.target.value)} placeholder="Enter username to block" className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><button onClick={handleAdminBlockUser} disabled={isSubmitting} className="px-4 py-2 bg-red-600 rounded-lg">{isSubmitting ? '...' : 'Block'}</button></div></div></div>)}
+                        {modalView === 'wallet' && (<div className="space-y-4"><div><h3 className="font-semibold mb-2">Grant Funds</h3><div className="flex gap-2"><input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)} placeholder="Amount" className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><button onClick={handleAdminGrantFunds} disabled={isSubmitting} className="px-4 py-2 bg-green-600 rounded-lg">{isSubmitting ? '...' : 'Grant'}</button></div></div></div>)}
+                    </div>
+                )}
+            </Modal>
+            <Modal isOpen={isPasswordModalOpen} onClose={closeAllModals} maxWidth="max-w-sm">
+                {selectedUser && (<div><h2 className="text-2xl font-bold mb-4">Reset Password for {selectedUser.username}</h2><input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="New Password" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4"/><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-4 py-2 bg-white/10 rounded-lg">Cancel</button><button onClick={handlePasswordReset} disabled={isSubmitting || !newPassword.trim()} className="px-4 py-2 bg-blue-600 rounded-lg">{isSubmitting ? 'Saving...' : 'Save'}</button></div></div>)}
+            </Modal>
+            <Modal isOpen={isEditGroupModalOpen} onClose={closeAllModals}>
+                {selectedGroup && (<div><h2 className="text-2xl font-bold mb-4">Edit Group: {selectedGroup.name}</h2><div className="space-y-4"><input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} placeholder="Group Name" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4" /><input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} placeholder="Group Password (optional)" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4" /><div><h3 className="font-semibold mb-2">Members</h3><div className="max-h-60 overflow-y-auto custom-scrollbar space-y-2 p-2 bg-black/20 rounded-lg">{users.filter(u => !u.isAdmin).map(user => (<div key={user.id} className="flex items-center gap-3"><input type="checkbox" checked={groupMembers.includes(user.id)} onChange={() => toggleGroupMember(user.id)} className="w-4 h-4 rounded bg-white/20 border-white/30 text-blue-500 focus:ring-blue-500" /><span>{user.username}</span></div>))}</div></div></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-4 py-2 bg-white/10 rounded-lg">Cancel</button><button onClick={handleGroupUpdate} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 rounded-lg">{isSubmitting ? 'Saving...' : 'Save'}</button></div></div>)}
+            </Modal>
+            <Modal isOpen={isVerificationModalOpen} onClose={closeAllModals} maxWidth="max-w-sm">
+                {selectedUser && (<div><h2 className="text-2xl font-bold mb-4">Manage Verification</h2><div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Badge Type</label><div ref={badgeSelectorRef} className="relative"><button onClick={() => setIsBadgeSelectorOpen(p => !p)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-left flex justify-between items-center"><BadgeOption badge={badgeType} /><ChevronDownIcon className={`w-5 h-5 transition-transform ${isBadgeSelectorOpen ? 'rotate-180' : ''}`} /></button>{isBadgeSelectorOpen && (<div className="absolute top-full mt-1 w-full bg-slate-800 border border-white/10 rounded-lg z-10 p-1 space-y-1">{Object.keys(MARKETPLACE_ITEMS.nameColors).map(b => b as VerificationBadgeType | 'none').map(b => (<div key={b} onClick={()=>{setBadgeType(b); setIsBadgeSelectorOpen(false);}} className="p-2 hover:bg-white/10 rounded-md cursor-pointer"><BadgeOption badge={b} /></div>))}</div>)}</div></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Expiry</label><div className="grid grid-cols-3 gap-2"><select value={expiryType} onChange={e => setExpiryType(e.target.value as any)} className="col-span-1 bg-white/5 border border-white/10 rounded-lg p-2"><option value="permanent">Permanent</option><option value="hours">Hours</option><option value="days">Days</option></select><input type="number" value={expiryValue} onChange={e => setExpiryValue(e.target.value)} disabled={expiryType === 'permanent'} placeholder="Duration" className="col-span-2 bg-white/5 border border-white/10 rounded-lg p-2 disabled:opacity-50" /></div></div></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-4 py-2 bg-white/10 rounded-lg">Cancel</button><button onClick={handleVerificationUpdate} disabled={isSubmitting} className="px-4 py-2 bg-blue-600 rounded-lg">{isSubmitting ? 'Saving...' : 'Save'}</button></div></div>)}
+            </Modal>
+            <Modal isOpen={isGrantModalOpen} onClose={closeAllModals} maxWidth="max-w-sm">
+                {selectedUser && (<div><h2 className="text-2xl font-bold mb-4">Grant Funds</h2><div className="flex gap-2"><input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)} placeholder={`Amount for ${selectedUser.username}`} className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4" /><button onClick={handleAdminGrantFunds} disabled={isSubmitting} className="px-4 py-2 bg-green-600 rounded-lg">{isSubmitting ? '...' : 'Grant'}</button></div></div>)}
+            </Modal>
+            <Modal isOpen={isFreezeModalOpen} onClose={closeAllModals} maxWidth="max-w-sm">
+                {selectedUser && (<div><h2 className="text-2xl font-bold mb-4">Freeze {selectedUser.username}'s Account</h2><div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Duration</label><div className="grid grid-cols-3 gap-2"><select value={freezeType} onChange={e => setFreezeType(e.target.value as any)} className="col-span-1 bg-white/5 border border-white/10 rounded-lg p-2"><option value="permanent">Permanent</option><option value="hours">Hours</option><option value="days">Days</option></select><input type="number" value={freezeValue} onChange={e => setFreezeValue(e.target.value)} disabled={freezeType === 'permanent'} placeholder="Duration" className="col-span-2 bg-white/5 border border-white/10 rounded-lg p-2 disabled:opacity-50" /></div></div></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-4 py-2 bg-white/10 rounded-lg">Cancel</button><button onClick={handleFreezeUpdate} disabled={isSubmitting} className="px-4 py-2 bg-red-600 rounded-lg">{isSubmitting ? 'Freezing...' : 'Freeze Account'}</button></div></div>)}
+            </Modal>
         </>
     );
 }
-// Health check comment
-// N
