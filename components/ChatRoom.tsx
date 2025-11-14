@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
@@ -64,6 +63,70 @@ const formatCurrency = (amount: number | null | undefined) => {
     }
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 };
+
+// --- Custom User Selector Component ---
+const UserSelector: React.FC<{
+    users: User[];
+    selectedUserId: string;
+    onSelectUser: (userId: string) => void;
+    disabled?: boolean;
+}> = ({ users, selectedUserId, onSelectUser, disabled }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const selectorRef = useRef<HTMLDivElement>(null);
+    const selectedUser = useMemo(() => users.find(u => u.id === selectedUserId), [users, selectedUserId]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (selectorRef.current && !selectorRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    return (
+        <div className="relative" ref={selectorRef}>
+            <button
+                type="button"
+                onClick={() => setIsOpen(p => !p)}
+                disabled={disabled}
+                className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white flex items-center gap-3 text-left transition-colors hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                {selectedUser ? (
+                    <>
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{selectedUser.avatar}</div>
+                        <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
+                            <span className="font-semibold truncate">{selectedUser.username}</span>
+                            {renderUserBadge(selectedUser)}
+                        </div>
+                    </>
+                ) : (
+                    <span className="text-slate-400">Select a user...</span>
+                )}
+                 <ChevronDownIcon className={`w-5 h-5 text-slate-400 ml-auto flex-shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {isOpen && (
+                <div className="absolute top-full mt-2 w-full bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-lg shadow-2xl z-20 p-1 space-y-1 max-h-60 overflow-y-auto custom-scrollbar">
+                    {users.map(user => (
+                        <div
+                            key={user.id}
+                            onClick={() => { onSelectUser(user.id); setIsOpen(false); }}
+                            className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-cyan-500/20 transition-colors"
+                        >
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{user.avatar}</div>
+                            <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
+                                <span className="font-semibold truncate">{user.username}</span>
+                                {renderUserBadge(user)}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.ReactNode; maxWidth?: string; }> = ({ isOpen, onClose, children, maxWidth = 'max-w-sm' }) => {
     const [isVisible, setIsVisible] = useState(isOpen);
@@ -279,10 +342,12 @@ const ProfileModal: React.FC<{
                 </div>
                 <form onSubmit={handleTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
                     <h3 className="font-semibold text-lg text-white">Send Funds</h3>
-                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}>
-                        <option value="">Select a user...</option>
-                        {allOtherUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                    </select>
+                    <UserSelector
+                        users={allOtherUsers}
+                        selectedUserId={transferUser}
+                        onSelectUser={setTransferUser}
+                        disabled={isAccountFrozen}
+                    />
                     <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
                     {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
                     <button type="submit" disabled={isSubmitting || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
@@ -833,10 +898,12 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 </div>
                 <form onSubmit={handlePanelTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
                     <h3 className="font-semibold text-lg text-white">Send Funds</h3>
-                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}>
-                        <option value="">Select a user...</option>
-                        {allOtherUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
-                    </select>
+                     <UserSelector
+                        users={allOtherUsers}
+                        selectedUserId={transferUser}
+                        onSelectUser={setTransferUser}
+                        disabled={isAccountFrozen}
+                    />
                     <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}/>
                     {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
                     <button type="submit" disabled={isSubmittingTransfer || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">

@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 export const LockClosedIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
@@ -9,7 +8,7 @@ export const LockClosedIcon: React.FC<{ className?: string }> = ({ className = "
 
 export const LockOpenIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-    <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a.75.75 0 011.5 0v6.75a4.5 4.5 0 01-4.5 4.5H9a4.5 4.5 0 01-4.5-4.5v-6.75a4.5 4.5 0 014.5-4.5v-3A5.25 5.25 0 0118 1.5z" />
+    <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a.75.75 0 011.5 0v6.75a4.5 4.5 0 01-4.5-4.5H9a4.5 4.5 0 01-4.5-4.5v-6.75a4.5 4.5 0 014.5-4.5v-3A5.25 5.25 0 0118 1.5z" />
   </svg>
 );
 
@@ -199,13 +198,18 @@ export const ShoppingCartIcon: React.FC<{ className?: string }> = ({ className =
 // FIX: Added missing ChatBubbleLeftRightIcon component
 export const ChatBubbleLeftRightIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path fillRule="evenodd" d="M4.804 21.644A6.707 6.707 0 006 21.75a6.75 6.75 0 006.75-6.75v-2.502a6.75 6.75 0 00-6.75-6.75H6a6.75 6.75 0 00-6.75 6.75v1.252a6.707 6.707 0 001.054 3.543l2.25-2.25a.75.75 0 011.06 1.06l-2.25 2.25zm10.272-1.06a.75.75 0 010-1.06l2.25-2.25a6.707 6.707 0 001.054-3.543V12a6.75 6.75 0 00-6.75-6.75h-.196a6.75 6.75 0 00-6.75 6.75v2.501a6.75 6.75 0 006.75 6.75h.196a6.707 6.707 0 003.543-1.054l2.25 2.25a.75.75 0 011.06 0z" clipRule="evenodd" />
+        <path fillRule="evenodd" d="M4.804 21.644A6.707 6.707 0 006 21.75a6.75 6.75 0 006.75-6.75v-2.5a.75.75 0 011.5 0v2.5a8.25 8.25 0 01-8.25 8.25c-1.33 0-2.6-.31-3.75-.882V21a.75.75 0 01.75-.75h2.804z" clipRule="evenodd" />
+        <path d="M15.75 2.25a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0v-6a.75.75 0 01.75-.75zM19.5 4.5a.75.75 0 01.75.75v2.25a.75.75 0 01-1.5 0V5.25a.75.75 0 01.75-.75z" />
+        <path fillRule="evenodd" d="M6.75 2.25A.75.75 0 006 3v11.25a6.75 6.75 0 006.75 6.75c.586 0 1.156-.074 1.706-.212A.75.75 0 0115 20.25v-3.445a.75.75 0 01.568-.731A8.25 8.25 0 0018.75 9 8.25 8.25 0 006 3a.75.75 0 00.75-.75zM12 12.75a.75.75 0 00-1.5 0v1.5a.75.75 0 001.5 0v-1.5z" clipRule="evenodd" />
+        <path d="M8.25 8.25a.75.75 0 010 1.5H6a.75.75 0 010-1.5h2.25z" />
     </svg>
 );
 
+
+// FIX: Corrected a corrupted SVG path data.
 export const CurrencyDollarIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path d="M12 7.5a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
-      <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h15a3 3 0 013 3v15a3 3 0 01-3 3h-15a3 3 0 01-3-3V4.5zM8.25 9a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM12 15a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-3a.75.75 0 01-.75-.75v-.008a.75.75 0 01.75-.75h.008a.75.75 0 01.75-.75v-.008a.75.75 0 01.75-.75z" clipRule="evenodd" />
+        <path d="M12 7.5a.75.75 0 01.75.75v.5a2.25 2.25 0 004.5 0v-.5a.75.75 0 011.5 0v.5a3.75 3.75 0 11-7.5 0v-.5a.75.75 0 01.75-.75z" />
+        <path fillRule="evenodd" d="M3 8.25a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 8.25zM6.75 12a.75.75 0 01.75-.75H12a.75.75 0 010 1.5H7.5a.75.75 0 01-.75-.75zm.75 2.25a.75.75 0 000 1.5h3a.75.75 0 000-1.5h-3zM3 15.75a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75z" clipRule="evenodd" />
     </svg>
 );
