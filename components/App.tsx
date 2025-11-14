@@ -1,10 +1,9 @@
-
 import React, { useState, useReducer, useEffect } from 'react';
-import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType } from './types';
-import GroupLocker from './components/GroupLocker';
-import ChatRoom from './components/ChatRoom';
-import AdminPanel from './components/AdminPanel';
-import { db } from './components/db';
+import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType } from '../types';
+import GroupLocker from './GroupLocker';
+import ChatRoom from './ChatRoom';
+import AdminPanel from './AdminPanel';
+import { db } from './db';
 
 interface CreateGroupChatParams {
   memberIds: string[];
