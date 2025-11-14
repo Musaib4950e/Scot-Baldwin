@@ -12,11 +12,7 @@
     <style>
       body {
         font-family: 'Inter', sans-serif;
-        background-image: url('https://images.unsplash.com/photo-1554034483-043a352599e2?q=80&w=3456&auto=format&fit=crop');
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        background-attachment: fixed;
+        /* The background is now handled by the .animated-gradient class on the body tag for better visibility */
       }
       h1, h2, h3, h4, h5, h6 {
         font-family: 'Space Grotesk', sans-serif;
@@ -79,7 +75,7 @@
 }
 </script>
 </head>
-  <body>
+  <body class="animated-gradient">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
