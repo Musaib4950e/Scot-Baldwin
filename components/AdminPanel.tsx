@@ -1,11 +1,35 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction } from '../types';
 import { db } from './db';
-// FIX: Added missing CheckCircleIcon to imports
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
+// Helper component for the visual badge selector
+const BadgeOption: React.FC<{ badge: VerificationBadgeType | 'none' }> = ({ badge }) => {
+    const badgeDetails: Record<VerificationBadgeType | 'none', { color: string, name: string }> = {
+        none: { color: 'text-slate-400', name: 'None (Revoke)' },
+        blue: { color: 'text-blue-400', name: 'Blue' },
+        red: { color: 'text-red-400', name: 'Red' },
+        gold: { color: 'text-amber-400', name: 'Gold' },
+        pink: { color: 'text-pink-400', name: 'Pink' },
+        grey: { color: 'text-slate-400', name: 'Grey' },
+        pastel_blue: { color: 'text-sky-300', name: 'Pastel Blue' },
+    };
+
+    const { color, name } = badgeDetails[badge];
+
+    return (
+        <div className="flex items-center gap-3">
+            {badge === 'none' ? (
+                <BanIcon className={`w-5 h-5 ${color}`} />
+            ) : (
+                <CheckBadgeIcon className={`w-5 h-5 ${color}`} />
+            )}
+            <span className="font-semibold text-white">{name}</span>
+        </div>
+    );
+};
 
 interface AdminPanelProps {
     currentUser: User;
@@ -92,6 +116,19 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [isBroadcasting, setIsBroadcasting] = useState(false);
+    
+    const [isBadgeSelectorOpen, setIsBadgeSelectorOpen] = useState(false);
+    const badgeSelectorRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (badgeSelectorRef.current && !badgeSelectorRef.current.contains(event.target as Node)) {
+                setIsBadgeSelectorOpen(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
 
     const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
     const verificationRequests = useMemo(() => users.filter(u => u.verification?.status === 'pending'), [users]);
@@ -477,7 +514,6 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                                         break;
                                                     default:
                                                         typeIcon = null;
-                                                        {/* FIX: Cast t.type to string to avoid 'never' type error due to exhaustive switch */}
                                                         typeText = (t.type as string).replace(/_/g, ' ');
                                                         fromText = fromUser?.username || t.fromUserId;
                                                         toText = toUser?.username || t.toUserId;
@@ -521,7 +557,60 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     )}
                     {isPasswordModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">New Password</label><input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handlePasswordReset} disabled={isSubmitting || !newPassword.trim()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Reset Password'}</button></div></div>)}
                     {isEditGroupModalOpen && selectedGroup && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Name</label><input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Password (optional)</label><input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><h3 className="text-lg font-semibold mt-2 mb-2 text-slate-300">Members</h3><div className="max-h-48 overflow-y-auto custom-scrollbar pr-2 -mr-2 space-y-2">{users.filter(u => u.id !== currentUser.id).map(user => (<div key={user.id} onClick={() => toggleGroupMember(user.id)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${groupMembers.includes(user.id) ? 'bg-blue-500/30' : 'hover:bg-white/5'}`}><div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{user.avatar}</div><span className="font-semibold">{user.username}</span><div className={`ml-auto w-5 h-5 rounded-full flex items-center justify-center border-2 ${groupMembers.includes(user.id) ? 'bg-blue-500 border-blue-400' : 'border-slate-500 bg-white/10'}`}> {groupMembers.includes(user.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}</div></div>))}</div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleGroupUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button></div></div>)}
-                    {isVerificationModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Badge Type</label><select value={badgeType} onChange={e => setBadgeType(e.target.value as VerificationBadgeType | 'none')} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white"><option value="none">None (Revoke)</option><option value="blue">Blue</option><option value="red">Red</option><option value="pink">Pink</option><option value="gold">Gold</option><option value="grey">Grey</option><option value="pastel_blue">Pastel Blue (Admin Only)</option></select></div>{badgeType !== 'none' && (<div><label className="block text-sm font-medium text-slate-300 mb-1">Duration</label><div className="flex gap-2"><select value={expiryType} onChange={e => setExpiryType(e.target.value as 'permanent' | 'hours' | 'days')} className="bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white"><option value="permanent">Permanent</option><option value="hours">Hours</option><option value="days">Days</option></select>{expiryType !== 'permanent' && (<input type="number" value={expiryValue} onChange={e => setExpiryValue(e.target.value)} min="1" placeholder={`Enter ${expiryType}`} className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" />)}</div></div>)}<div className="mt-6 flex justify-between items-center"><button onClick={handleVerificationRevoke} disabled={isSubmitting} className="px-5 py-2.5 bg-red-600/50 hover:bg-red-600/70 text-white rounded-lg font-semibold">Revoke Badge</button><div className="flex gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleVerificationUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button></div></div></div>)}
+                    {isVerificationModalOpen && selectedUser && (
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Badge Type</label>
+                                <div className="relative" ref={badgeSelectorRef}>
+                                    <button 
+                                        type="button" 
+                                        onClick={() => setIsBadgeSelectorOpen(p => !p)} 
+                                        className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white hover:border-white/20 transition-colors"
+                                    >
+                                        <BadgeOption badge={badgeType} />
+                                        <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isBadgeSelectorOpen ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {isBadgeSelectorOpen && (
+                                        <div className="absolute top-full mt-2 w-full bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-lg shadow-2xl z-20 p-1 space-y-1">
+                                            {(['none', 'blue', 'red', 'pink', 'gold', 'grey', 'pastel_blue'] as const).map(b => (
+                                                <button
+                                                    type="button"
+                                                    key={b}
+                                                    onClick={() => {
+                                                        setBadgeType(b);
+                                                        setIsBadgeSelectorOpen(false);
+                                                    }}
+                                                    className="w-full text-left p-2 rounded-md hover:bg-white/10 transition-colors"
+                                                >
+                                                    <BadgeOption badge={b} />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            {badgeType !== 'none' && (
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Duration</label>
+                                <div className="flex gap-2">
+                                <select value={expiryType} onChange={e => setExpiryType(e.target.value as 'permanent' | 'hours' | 'days')} className="bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white">
+                                    <option value="permanent">Permanent</option>
+                                    <option value="hours">Hours</option>
+                                    <option value="days">Days</option>
+                                </select>
+                                {expiryType !== 'permanent' && (<input type="number" value={expiryValue} onChange={e => setExpiryValue(e.target.value)} min="1" placeholder={`Enter ${expiryType}`} className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" />)}
+                                </div>
+                            </div>
+                            )}
+                            <div className="mt-6 flex justify-between items-center">
+                                <button onClick={handleVerificationRevoke} disabled={isSubmitting} className="px-5 py-2.5 bg-red-600/50 hover:bg-red-600/70 text-white rounded-lg font-semibold">Revoke Badge</button>
+                                <div className="flex gap-3">
+                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button>
+                                    <button onClick={handleVerificationUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {isGrantModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Amount (USD)</label><input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)} min="0" placeholder="Amount to grant" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white" /></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleAdminGrantFunds} disabled={isSubmitting || !grantAmount.trim()} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 rounded-lg font-semibold">{isSubmitting ? 'Granting...' : 'Grant Funds'}</button></div></div>)}
                     {isFreezeModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Freeze Duration</label><div className="flex gap-2"><select value={freezeType} onChange={e => setFreezeType(e.target.value as 'permanent' | 'hours' | 'days')} className="bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white"><option value="permanent">Permanent</option><option value="hours">Hours</option><option value="days">Days</option></select>{freezeType !== 'permanent' && (<input type="number" value={freezeValue} onChange={e => setFreezeValue(e.target.value)} min="1" placeholder={`Enter ${freezeType}`} className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white" />)}</div></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleFreezeUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg font-semibold">{isSubmitting ? 'Freezing...' : 'Freeze Account'}</button></div></div>)}
                 </div>
