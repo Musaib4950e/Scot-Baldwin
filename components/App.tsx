@@ -5,7 +5,7 @@ import GroupLocker from './GroupLocker';
 import ChatRoom from './ChatRoom';
 // FIX: Changed to a named import as AdminPanel does not have a default export.
 import { AdminPanel } from './AdminPanel';
-import { db } from './db';
+import { db } from './supabaseDb';
 
 interface CreateGroupChatParams {
   memberIds: string[];
@@ -40,43 +40,34 @@ const App: React.FC = () => {
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
-    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
-        db.getUsers(),
-        db.getChats(),
-        db.getMessages(),
-        db.getCurrentUser(),
-        db.getLoggedInUsers(),
-        db.getConnections(),
-        db.getTransactions(),
-        db.getReports(),
-    ]);
-    setUsers(usersData);
-    setChats(chatsData);
-    setMessages(messagesData);
-    setCurrentUser(currentUserData);
-    setLoggedInUsers(loggedInUsersData);
-    setConnections(connectionsData);
-    setTransactions(transactionsData);
-    setReports(reportsData);
-    setIsLoading(false);
+    try {
+      const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
+          db.getUsers(),
+          db.getChats(),
+          db.getMessages(),
+          db.getCurrentUser(),
+          db.getLoggedInUsers(),
+          db.getConnections(),
+          db.getTransactions(),
+          db.getReports(),
+      ]);
+      setUsers(usersData);
+      setChats(chatsData);
+      setMessages(messagesData);
+      setCurrentUser(currentUserData);
+      setLoggedInUsers(loggedInUsersData);
+      setConnections(connectionsData);
+      setTransactions(transactionsData);
+      setReports(reportsData);
+      setIsLoading(false);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setIsLoading(false);
+    }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    const handleStorageChange = (event: StorageEvent) => {
-        if (event.key === 'bakko-db-update') {
-            fetchData();
-        }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    return () => {
-        window.removeEventListener('storage', handleStorageChange);
-    };
+    db.initialize().then(() => fetchData());
   }, []);
 
 
