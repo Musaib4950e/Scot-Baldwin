@@ -81,7 +81,7 @@ class AppDatabase {
     }
 
     private seed() {
-        const adminUser: User = { id: generateId('user'), username: 'Admin', password: 'password', avatar: '👑', online: false, isAdmin: true, walletBalance: 999999, verification: { status: 'approved', badgeType: 'aurora' }, inventory: { borders: [], nameColors: [] } };
+        const adminUser: User = { id: generateId('user'), username: 'Admin', password: '197700', avatar: '👑', online: false, isAdmin: true, walletBalance: 999999, verification: { status: 'approved', badgeType: 'aurora' }, inventory: { borders: [], nameColors: [] } };
         const usersData: Omit<User, 'id' | 'online' | 'walletBalance' | 'inventory'>[] = [
             { username: 'Alice', password: 'password', avatar: 'A', bio: 'Frontend Developer', email: 'alice@example.com' },
             { username: 'Bob', password: 'password', avatar: 'B', bio: 'Backend Developer', email: 'bob@example.com' },
