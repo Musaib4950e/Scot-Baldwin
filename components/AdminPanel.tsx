@@ -109,7 +109,7 @@ const formatCurrency = (amount: number | null | undefined) => {
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const { currentUser, users, chats, messages, connections, transactions, reports, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification, onAdminGrantFunds, onAdminUpdateUserFreezeStatus, onUpdateReportStatus } = props;
     
-    const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests' | 'verification' | 'transactions' | 'wallets' | 'reports'>('dashboard');
+    const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests' | 'verification' | 'transactions' | 'wallets' | 'reports' | 'announcements'>('dashboard');
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<Chat | null>(null);
     const [viewingGroupChat, setViewingGroupChat] = useState<Chat | null>(null);
@@ -162,6 +162,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
     const verificationRequests = useMemo(() => users.filter(u => u.verification?.status === 'pending'), [users]);
     const pendingReports = useMemo(() => reports.filter(r => r.status === 'pending'), [reports]);
+    const announcements = useMemo(() => messages.filter(m => m.type === 'announcement').sort((a, b) => b.timestamp - a.timestamp), [messages]);
     
     const viewingGroupMessages = useMemo(() => {
         if (!viewingGroupChat) return [];
@@ -338,6 +339,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <button onClick={() => setView('reports')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${view === 'reports' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><ExclamationTriangleIcon className="w-6 h-6" /><span>Reports</span>{pendingReports.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{pendingReports.length}</span>}</button>
                         <button onClick={() => setView('groups')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'groups' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><UsersIcon className="w-6 h-6" /><span>Groups</span></button>
                         <button onClick={() => setView('transactions')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'transactions' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><CurrencyDollarIcon className="w-6 h-6" /><span>Transaction Log</span></button>
+                        <button onClick={() => setView('announcements')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'announcements' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><MegaphoneIcon className="w-6 h-6" /><span>Announcements</span></button>
                     </nav>
                     <div><button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors"><ArrowLeftOnRectangleIcon className="w-6 h-6" /><span className="font-semibold">Logout</span></button></div>
                 </aside>
@@ -609,6 +611,46 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     </table>
                                 </div>
                              </div>
+                        </div>
+                    )}
+                    {view === 'announcements' && (
+                         <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Announcement Analytics</h1>
+                             <div className="grid grid-cols-1 gap-6">
+                                <div className="bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10">
+                                    <h3 className="text-slate-400 text-sm font-semibold">Total Announcements Sent</h3>
+                                    <p className="text-4xl font-bold text-white">{announcements.length}</p>
+                                </div>
+                                <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left">
+                                            <thead className="border-b border-white/10 text-sm text-slate-400">
+                                                <tr>
+                                                    <th className="p-4">Sent By</th>
+                                                    <th className="p-4">Message</th>
+                                                    <th className="p-4">Date</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {announcements.length > 0 ? announcements.map(announcement => {
+                                                    const author = users.find(u => u.id === announcement.authorId);
+                                                    return (
+                                                        <tr key={announcement.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
+                                                            <td className="p-4 font-semibold">{author?.username || 'Unknown Admin'}</td>
+                                                            <td className="p-4 text-slate-300 max-w-lg whitespace-pre-wrap">{announcement.text}</td>
+                                                            <td className="p-4 text-slate-400">{new Date(announcement.timestamp).toLocaleString()}</td>
+                                                        </tr>
+                                                    );
+                                                }) : (
+                                                    <tr>
+                                                        <td colSpan={3} className="text-center p-8 text-slate-500">No announcements have been sent.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </main>

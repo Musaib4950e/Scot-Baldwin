@@ -550,6 +550,51 @@ class Database {
         this.notifyDataChanged();
     }
 
+    deleteUserChats = async (chatIds: string[]): Promise<void> => {
+        await this.isInitialized;
+        if (chatIds.length === 0) return;
+
+        const db = await this.dbPromise;
+        const tx = db.transaction([CHATS_STORE, MESSAGES_STORE], 'readwrite');
+        const chatStore = tx.objectStore(CHATS_STORE);
+        const messageStore = tx.objectStore(MESSAGES_STORE);
+        const messageIndex = messageStore.index('chatId');
+
+        const deletePromises = chatIds.map(chatId => {
+            // Safeguard: never delete the global announcements chat
+            if (chatId === ANNOUNCEMENT_CHAT_ID) {
+                return Promise.resolve();
+            }
+
+            // Delete the chat itself
+            chatStore.delete(chatId);
+
+            // Delete all messages associated with the chat
+            return new Promise<void>(resolve => {
+                const keyRange = IDBKeyRange.only(chatId);
+                const cursorReq = messageIndex.openCursor(keyRange);
+                cursorReq.onsuccess = () => {
+                    const cursor = cursorReq.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    } else {
+                        resolve();
+                    }
+                };
+                 cursorReq.onerror = () => {
+                    console.error("Cursor error in message deletion");
+                    resolve(); // Resolve anyway to not block other deletions
+                };
+            });
+        });
+
+        await Promise.all(deletePromises);
+        
+        await new Promise<void>(r => tx.oncomplete = () => r());
+        this.notifyDataChanged();
+    }
+
     addConnection = async (fromUserId: string, toUserId: string): Promise<void> => {
         await this.isInitialized;
         const newConnection: Connection = {

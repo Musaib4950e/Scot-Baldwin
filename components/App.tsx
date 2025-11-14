@@ -1,7 +1,6 @@
 import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
 import GroupLocker from './GroupLocker';
-// FIX: Module '"file:///components/ChatRoom"' has no default export. Added default export to ChatRoom.tsx
 import ChatRoom from './ChatRoom';
 import AdminPanel from './AdminPanel';
 import { db } from './db';
@@ -163,6 +162,12 @@ const App: React.FC = () => {
     await db.deleteGroup(chatId);
     setChats(await db.getChats());
     setMessages(await db.getMessages());
+  };
+
+  const handleDeleteUserChats = async (chatIds: string[]) => {
+    if (!currentUser || currentUser.isAdmin) return;
+    await db.deleteUserChats(chatIds);
+    await fetchData();
   };
 
   const handleSendRequest = async (toUserId: string) => {
@@ -355,6 +360,7 @@ const App: React.FC = () => {
             onPurchaseCosmetic={handlePurchaseCosmetic}
             onEquipCustomization={handleEquipCustomization}
             onReportUser={handleReportUser}
+            onDeleteUserChats={handleDeleteUserChats}
           />
         )
       ) : (
