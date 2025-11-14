@@ -12,7 +12,7 @@
     <style>
       body {
         font-family: 'Inter', sans-serif;
-        background-image: url('https://images.unsplash.com/photo-1511497584788-876760111969?q=80&w=3432&auto=format&fit=crop');
+        background-image: url('https://images.unsplash.com/photo-1554034483-043a352599e2?q=80&w=3456&auto=format&fit=crop');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
@@ -29,11 +29,11 @@
         background: transparent;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: #334155; /* slate-700 */
+        background: rgba(148, 163, 184, 0.3); /* slate-400 @ 30% */
         border-radius: 4px;
       }
       .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-        background: #475569; /* slate-600 */
+        background: rgba(148, 163, 184, 0.5); /* slate-400 @ 50% */
       }
       
       @keyframes gradient-animation {
@@ -42,19 +42,31 @@
         100% { background-position: 0% 50%; }
       }
       .animated-gradient {
-        background: linear-gradient(-45deg, #0b0f29, #1e1b4b, #312e81, #1e293b);
+        background: linear-gradient(-45deg, #0f0c29, #302b63, #24243e, #a855f7, #3b82f6);
         background-size: 400% 400%;
         animation: gradient-animation 20s ease infinite;
       }
 
       .rich-text-code {
-        background-color: rgba(30, 41, 59, 0.5);
+        background-color: rgba(0, 0, 0, 0.3);
         color: #67e8f9; /* cyan-300 */
         font-family: monospace;
         font-size: 0.9em;
         padding: 0.125rem 0.375rem;
         border-radius: 0.25rem;
+        border: 1px solid rgba(255,255,255,0.1);
       }
+      
+      .glow-border {
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.1);
+      }
+      .glow-border-hover:hover {
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.2), 0 0 15px rgba(59, 130, 246, 0.3);
+      }
+      .glow-border-focus:focus-within {
+        box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5), 0 0 15px rgba(59, 130, 246, 0.5);
+      }
+
     </style>
   <script type="importmap">
 {

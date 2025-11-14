@@ -189,7 +189,7 @@ const App: React.FC = () => {
   if (isLoading) {
     return (
         <div className="animated-gradient text-white min-h-screen w-full flex flex-col items-center justify-center">
-            <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-teal-300 to-blue-400 mb-4 animate-pulse">BAK -Ko</h1>
+            <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-300 mb-4 animate-pulse">BAK -Ko</h1>
             <p className="text-lg text-slate-400">Initializing secure session...</p>
         </div>
     )

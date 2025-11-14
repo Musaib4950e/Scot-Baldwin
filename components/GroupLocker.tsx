@@ -126,23 +126,26 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
   };
   
   const renderContent = () => {
+    const inputClasses = "w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white placeholder:text-slate-400 focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 focus:outline-none transition";
+    const buttonClasses = "w-full px-5 py-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-full transition-all duration-300 font-bold text-lg disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70 flex items-center justify-center transform hover:scale-105 hover:shadow-lg hover:shadow-cyan-500/20";
+
     switch(mode) {
       case 'signup':
         return (
             <>
-              <h2 className="text-4xl font-bold text-center mb-8">Create Account</h2>
+              <h2 className="text-4xl font-bold text-center mb-8 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-300">Create Account</h2>
               <form onSubmit={handleCreateUser} className="space-y-6">
-                <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="Username" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
-                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Password" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
-                <input type="text" value={newInstagram} onChange={(e) => setNewInstagram(e.target.value)} placeholder="Instagram (optional)" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
+                <input type="text" value={newUsername} onChange={(e) => setNewUsername(e.target.value)} placeholder="Username" className={inputClasses}/>
+                <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Password" className={inputClasses}/>
+                <input type="text" value={newInstagram} onChange={(e) => setNewInstagram(e.target.value)} placeholder="Instagram (optional)" className={inputClasses}/>
                 {createError && <p className="text-red-400 text-sm text-center !mt-4">{createError}</p>}
-                <button type="submit" className="w-full px-5 py-3 bg-white text-slate-900 rounded-full transition-all duration-300 font-bold text-lg disabled:bg-slate-400 disabled:opacity-70 flex items-center justify-center transform hover:scale-105" disabled={!newUsername.trim() || !newPassword.trim() || isSubmitting}>
+                <button type="submit" className={buttonClasses} disabled={!newUsername.trim() || !newPassword.trim() || isSubmitting}>
                   {isSubmitting ? 'Creating...' : 'Sign Up'}
                 </button>
               </form>
               <p className="text-center text-sm text-slate-300 mt-6">
                 Already have an account?{' '}
-                <button onClick={() => switchMode('login')} className="font-semibold text-white hover:underline">
+                <button onClick={() => switchMode('login')} className="font-semibold text-cyan-300 hover:underline">
                   Log In
                 </button>
               </p>
@@ -151,18 +154,18 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
       case 'forgot':
         return (
           <>
-            <h2 className="text-4xl font-bold text-center mb-4">Forgot Password</h2>
+            <h2 className="text-4xl font-bold text-center mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-300">Forgot Password</h2>
              <p className="text-center text-sm text-slate-300 mb-6">Enter your email to receive a recovery code.</p>
             <form onSubmit={handleRequestRecovery} className="space-y-6">
-               <input type="email" value={recoveryEmail} onChange={(e) => setRecoveryEmail(e.target.value)} placeholder="Your email address" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
+               <input type="email" value={recoveryEmail} onChange={(e) => setRecoveryEmail(e.target.value)} placeholder="Your email address" className={inputClasses}/>
               {recoveryError && <p className="text-red-400 text-sm text-center !mt-4">{recoveryError}</p>}
-              <button type="submit" className="w-full px-5 py-3 bg-white text-slate-900 rounded-full transition-all duration-300 font-bold text-lg disabled:bg-slate-400 disabled:opacity-70 flex items-center justify-center transform hover:scale-105" disabled={isSubmitting}>
+              <button type="submit" className={buttonClasses} disabled={isSubmitting}>
                 {isSubmitting ? 'Sending...' : 'Send Recovery Code'}
               </button>
             </form>
             <p className="text-center text-sm text-slate-300 mt-6">
               Remember your password?{' '}
-              <button onClick={() => switchMode('login')} className="font-semibold text-white hover:underline">
+              <button onClick={() => switchMode('login')} className="font-semibold text-cyan-300 hover:underline">
                 Back to Login
               </button>
             </p>
@@ -171,18 +174,18 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
       case 'reset':
         return (
           <>
-            <h2 className="text-4xl font-bold text-center mb-4">Reset Password</h2>
-            <p className="text-center text-sm text-slate-300 mb-6">A recovery code has been generated. For this demo, your code is <strong className="text-lg text-cyan-300 font-mono tracking-widest">{generatedToken}</strong></p>
+            <h2 className="text-4xl font-bold text-center mb-4 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-300">Reset Password</h2>
+            <p className="text-center text-sm text-slate-300 mb-6">A recovery code has been generated. For this demo, your code is <strong className="text-lg text-cyan-300 font-mono tracking-widest bg-white/10 p-1 rounded-md">{generatedToken}</strong></p>
             <form onSubmit={handleResetPassword} className="space-y-6">
-               <input type="text" value={inputToken} onChange={(e) => setInputToken(e.target.value)} placeholder="Enter recovery code" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
-               <input type="password" value={newPasswordForReset} onChange={(e) => setNewPasswordForReset(e.target.value)} placeholder="Enter new password" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
+               <input type="text" value={inputToken} onChange={(e) => setInputToken(e.target.value)} placeholder="Enter recovery code" className={inputClasses}/>
+               <input type="password" value={newPasswordForReset} onChange={(e) => setNewPasswordForReset(e.target.value)} placeholder="Enter new password" className={inputClasses}/>
               {resetError && <p className="text-red-400 text-sm text-center !mt-4">{resetError}</p>}
-              <button type="submit" className="w-full px-5 py-3 bg-white text-slate-900 rounded-full transition-all duration-300 font-bold text-lg disabled:bg-slate-400 disabled:opacity-70 flex items-center justify-center transform hover:scale-105" disabled={isSubmitting}>
+              <button type="submit" className={buttonClasses} disabled={isSubmitting}>
                 {isSubmitting ? 'Resetting...' : 'Reset Password'}
               </button>
             </form>
              <p className="text-center text-sm text-slate-300 mt-6">
-              <button onClick={() => switchMode('forgot')} className="font-semibold text-white hover:underline">
+              <button onClick={() => switchMode('forgot')} className="font-semibold text-cyan-300 hover:underline">
                 Request a new code
               </button>
             </p>
@@ -192,40 +195,40 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
       default:
         return (
           <>
-            <h2 className="text-4xl font-bold text-center mb-8">Login</h2>
+            <h2 className="text-4xl font-bold text-center mb-8 bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-300">Login</h2>
             {loginMessage && <p className="text-green-400 text-sm text-center mb-4">{loginMessage}</p>}
             <form onSubmit={handleLoginAttempt} className="space-y-6">
-                <input type="text" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder="Username" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
-                <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Password" className="w-full bg-white/10 border-2 border-white/20 rounded-full px-5 py-3 text-white placeholder:text-slate-300 focus:ring-2 focus:ring-white/50 focus:border-white/20 focus:outline-none transition"/>
+                <input type="text" value={loginUsername} onChange={(e) => setLoginUsername(e.target.value)} placeholder="Username" className={inputClasses}/>
+                <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Password" className={inputClasses}/>
                 {loginError && <p className="text-red-400 text-sm text-center !mt-4">{loginError}</p>}
                 <div className="flex items-center justify-between text-sm">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" className="w-4 h-4 rounded bg-white/20 border-white/30 text-indigo-500 focus:ring-indigo-500" />
+                    <label className="flex items-center gap-2 cursor-pointer text-slate-300">
+                        <input type="checkbox" className="w-4 h-4 rounded bg-white/20 border-white/30 text-cyan-500 focus:ring-cyan-500" />
                         Remember me
                     </label>
-                    <button type="button" onClick={() => switchMode('forgot')} className="font-semibold text-white hover:underline">
+                    <button type="button" onClick={() => switchMode('forgot')} className="font-semibold text-cyan-300 hover:underline">
                         Forgot Password?
                     </button>
                 </div>
-                <button type="submit" className="w-full px-5 py-3 bg-white text-slate-900 rounded-full transition-all duration-300 font-bold text-lg disabled:bg-slate-400 disabled:opacity-70 flex items-center justify-center transform hover:scale-105" disabled={!loginUsername || !loginPassword || isSubmitting}>
+                <button type="submit" className={buttonClasses} disabled={!loginUsername || !loginPassword || isSubmitting}>
                     {isSubmitting ? 'Logging in...' : 'Login'}
                 </button>
             </form>
             <div className="relative text-center text-slate-300 mt-8 text-sm">
                 <div className="flex items-center my-4">
-                    <hr className="flex-grow border-white/20"/>
+                    <hr className="flex-grow border-white/10"/>
                     <span className="px-4 text-slate-400">Or</span>
-                    <hr className="flex-grow border-white/20"/>
+                    <hr className="flex-grow border-white/10"/>
                 </div>
                 <div className="flex justify-center items-center gap-4">
-                    <button className="font-semibold hover:underline">Google</button>
-                    <span>--</span>
-                    <button className="font-semibold hover:underline">Facebook</button>
+                    <button className="font-semibold hover:underline text-slate-400 hover:text-white">Google</button>
+                    <span>-</span>
+                    <button className="font-semibold hover:underline text-slate-400 hover:text-white">Facebook</button>
                 </div>
             </div>
             <p className="text-center text-sm text-slate-300 mt-6">
               Don't have an account?{' '}
-              <button onClick={() => switchMode('signup')} className="font-semibold text-white hover:underline">
+              <button onClick={() => switchMode('signup')} className="font-semibold text-cyan-300 hover:underline">
                 Sign Up
               </button>
             </p>
@@ -236,7 +239,7 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-black/30 backdrop-blur-xl border border-white/20 rounded-2xl p-8 shadow-2xl text-white">
+      <div className="w-full max-w-md bg-black/20 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/30 text-white">
         {renderContent()}
       </div>
     </div>

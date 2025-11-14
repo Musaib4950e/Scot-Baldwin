@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus } from '../types';
 import { db } from './db';
@@ -231,12 +232,12 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
     if (viewingGroupChat) {
          return (
-            <div className="flex flex-col h-screen bg-slate-900 text-white">
-                <header className="p-4 border-b border-slate-700/50 flex items-center gap-4 flex-shrink-0 bg-slate-800">
+            <div className="flex flex-col h-screen bg-black/30 text-white">
+                <header className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0 bg-black/10 backdrop-blur-2xl z-10">
                      <button onClick={() => setViewingGroupChat(null)} className="p-2 text-slate-400 hover:text-white">
                         <ArrowLeftIcon className="w-6 h-6" />
                     </button>
-                    <div className="w-10 h-10 rounded-full bg-indigo-500 flex items-center justify-center text-xl font-bold flex-shrink-0"><UsersIcon className="w-6 h-6"/></div>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0"><UsersIcon className="w-6 h-6"/></div>
                     <div>
                         <h2 className="text-xl font-bold">{viewingGroupChat.name}</h2>
                         <p className="text-xs text-slate-400">Viewing as Admin</p>
@@ -257,39 +258,39 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     
     return (
         <>
-            <div className="flex h-screen bg-slate-900 text-white">
+            <div className="flex h-screen bg-black/30 text-white">
                 {/* --- Sidebar --- */}
-                <aside className="w-64 flex-shrink-0 bg-slate-800 p-4 flex flex-col border-r border-slate-700">
+                <aside className="w-64 flex-shrink-0 bg-black/20 backdrop-blur-2xl p-4 flex flex-col border-r border-white/10">
                     <div className="flex items-center gap-3 p-2 mb-6">
                          <div className="relative flex-shrink-0">
-                            <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center text-2xl font-bold">{currentUser.avatar}</div>
+                            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold">{currentUser.avatar}</div>
                         </div>
                         <div className="overflow-hidden">
                             <h2 className="font-bold text-lg truncate">{currentUser.username}</h2>
-                            <p className="text-sm text-indigo-300 flex items-center gap-1.5"><ShieldCheckIcon className="w-4 h-4" /> Administrator</p>
+                            <p className="text-sm text-blue-300 flex items-center gap-1.5"><ShieldCheckIcon className="w-4 h-4" /> Administrator</p>
                         </div>
                     </div>
                     <nav className="flex-grow space-y-2">
-                         <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${view === 'dashboard' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
+                         <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}>
                             <ChartBarIcon className="w-6 h-6" />
                             <span>Dashboard</span>
                         </button>
-                        <button onClick={() => setView('users')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${view === 'users' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
+                        <button onClick={() => setView('users')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'users' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}>
                             <Cog6ToothIcon className="w-6 h-6" />
                             <span>User Management</span>
                         </button>
-                         <button onClick={() => setView('requests')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors relative ${view === 'requests' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
+                         <button onClick={() => setView('requests')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${view === 'requests' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}>
                             <EnvelopeIcon className="w-6 h-6" />
                             <span>Requests</span>
                             {pendingRequests.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{pendingRequests.length}</span>}
                         </button>
-                        <button onClick={() => setView('groups')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors ${view === 'groups' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-300 hover:bg-slate-700'}`}>
+                        <button onClick={() => setView('groups')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'groups' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}>
                             <UsersIcon className="w-6 h-6" />
                             <span>Group Management</span>
                         </button>
                     </nav>
                     <div>
-                         <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-slate-700 hover:text-white rounded-lg transition-colors">
+                         <button onClick={onLogout} className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-300 hover:bg-white/5 hover:text-white rounded-lg transition-colors">
                             <ArrowLeftOnRectangleIcon className="w-6 h-6" />
                             <span className="font-semibold">Logout</span>
                         </button>
@@ -302,30 +303,30 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <div>
                              <h1 className="text-4xl font-bold mb-8 text-white">Dashboard</h1>
                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                <div className="bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10">
                                     <h3 className="text-slate-400 text-sm font-semibold">Total Users</h3>
                                     <p className="text-4xl font-bold text-white">{stats.totalUsers}</p>
                                 </div>
-                                 <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                 <div className="bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10">
                                     <h3 className="text-slate-400 text-sm font-semibold">Online Now</h3>
                                     <p className="text-4xl font-bold text-green-400">{stats.onlineUsers}</p>
                                 </div>
-                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 col-span-1 md:col-span-2">
+                                <div className="bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10 col-span-1 md:col-span-2">
                                     <h3 className="text-slate-300 font-semibold mb-2">Broadcast Announcement</h3>
-                                    <textarea value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} placeholder="Send a message to all users..." rows={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"></textarea>
-                                    <button onClick={handleBroadcast} disabled={!broadcastMessage.trim() || isBroadcasting} className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70 flex items-center justify-center gap-2">
+                                    <textarea value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} placeholder="Send a message to all users..." rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"></textarea>
+                                    <button onClick={handleBroadcast} disabled={!broadcastMessage.trim() || isBroadcasting} className="w-full px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg transition-colors font-semibold disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70 flex items-center justify-center gap-2">
                                         <MegaphoneIcon className="w-5 h-5" />
                                         {isBroadcasting ? 'Sending...' : 'Broadcast'}
                                     </button>
                                 </div>
                              </div>
                              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                <div className="lg:col-span-2 bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10">
                                     <h3 className="text-slate-300 font-semibold mb-4">Activity (Last 7 Days)</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                         <div>
                                             <h4 className="text-sm text-slate-400 mb-2">New Users</h4>
-                                            <div className="h-48 flex justify-between items-end gap-2 p-2 border border-slate-700 rounded-lg">
+                                            <div className="h-48 flex justify-between items-end gap-2 p-2 border border-white/10 rounded-lg">
                                                 {stats.registrationsChart.data.map((val, i) => (
                                                     <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 group">
                                                          <span className="text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">{val}</span>
@@ -337,11 +338,11 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         </div>
                                          <div>
                                             <h4 className="text-sm text-slate-400 mb-2">Messages Sent</h4>
-                                            <div className="h-48 flex justify-between items-end gap-2 p-2 border border-slate-700 rounded-lg">
+                                            <div className="h-48 flex justify-between items-end gap-2 p-2 border border-white/10 rounded-lg">
                                                 {stats.messagesChart.data.map((val, i) => (
                                                     <div key={i} className="flex-1 flex flex-col items-center justify-end gap-1 group">
                                                         <span className="text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity">{val}</span>
-                                                        <div className="w-full bg-indigo-500/30 hover:bg-indigo-500/50 rounded-t" style={{ height: `${val === 0 ? 2 : (val / Math.max(...stats.messagesChart.data, 1)) * 100}%`}}></div>
+                                                        <div className="w-full bg-purple-500/30 hover:bg-purple-500/50 rounded-t" style={{ height: `${val === 0 ? 2 : (val / Math.max(...stats.messagesChart.data, 1)) * 100}%`}}></div>
                                                         <span className="text-xs text-slate-500">{stats.messagesChart.labels[i]}</span>
                                                     </div>
                                                 ))}
@@ -349,7 +350,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         </div>
                                     </div>
                                 </div>
-                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+                                <div className="bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10">
                                      <h3 className="text-slate-300 font-semibold mb-4">Most Active Groups</h3>
                                      <div className="space-y-3">
                                         {stats.activeGroups.length > 0 ? stats.activeGroups.map(group => (
@@ -358,8 +359,8 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                                     <span className="font-semibold truncate">{group.name}</span>
                                                     <span className="text-slate-400">{group.count} msgs</span>
                                                 </div>
-                                                 <div className="w-full bg-slate-700 rounded-full h-1.5">
-                                                    <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${(group.count / Math.max(stats.activeGroups[0].count, 1)) * 100}%`}}></div>
+                                                 <div className="w-full bg-white/10 rounded-full h-1.5">
+                                                    <div className="bg-gradient-to-r from-cyan-400 to-green-400 h-1.5 rounded-full" style={{ width: `${(group.count / Math.max(stats.activeGroups[0].count, 1)) * 100}%`}}></div>
                                                 </div>
                                             </div>
                                         )) : <p className="text-center text-slate-500 pt-8">No group activity yet.</p>}
@@ -373,9 +374,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <h1 className="text-4xl font-bold mb-8 text-white">User Management</h1>
                             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                                 {users.filter(u => !u.isAdmin).map(user => (
-                                    <div key={user.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col">
+                                    <div key={user.id} className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-5 flex flex-col">
                                         <div className="flex items-center gap-4 mb-4">
-                                            <div className="w-14 h-14 rounded-full bg-blue-500 flex items-center justify-center text-2xl font-bold flex-shrink-0">{user.avatar}</div>
+                                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0">{user.avatar}</div>
                                             <div className="overflow-hidden">
                                                 <p className="font-bold text-lg truncate">{user.username}</p>
                                                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${user.online ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}>
@@ -389,9 +390,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             <p><strong className="text-slate-400">User ID:</strong> <span className="font-mono text-xs">{user.id}</span></p>
                                         </div>
                                         <div className="mt-4 grid grid-cols-3 gap-2">
-                                            <button onClick={() => openEditUserModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
-                                            <button onClick={() => openPasswordModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><KeyIcon className="w-4 h-4" /> Pass</button>
-                                            <button onClick={() => handleDeleteUserConfirm(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-800/50 hover:bg-red-700/50 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button>
+                                            <button onClick={() => openEditUserModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
+                                            <button onClick={() => openPasswordModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><KeyIcon className="w-4 h-4" /> Pass</button>
+                                            <button onClick={() => handleDeleteUserConfirm(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button>
                                         </div>
                                     </div>
                                 ))}
@@ -402,9 +403,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     {view === 'requests' && (
                         <div>
                              <h1 className="text-4xl font-bold mb-8 text-white">Connection Requests</h1>
-                             <div className="bg-slate-800 border border-slate-700 rounded-2xl">
+                             <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl">
                                 <table className="w-full text-left">
-                                    <thead className="border-b border-slate-700 text-sm text-slate-400">
+                                    <thead className="border-b border-white/10 text-sm text-slate-400">
                                         <tr>
                                             <th className="p-4">From</th>
                                             <th className="p-4">To</th>
@@ -417,13 +418,13 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             const fromUser = users.find(u => u.id === req.fromUserId);
                                             const toUser = users.find(u => u.id === req.toUserId);
                                             return (
-                                                <tr key={req.id} className="border-b border-slate-700/50 hover:bg-slate-700/20">
+                                                <tr key={req.id} className="border-b border-white/10 hover:bg-white/5">
                                                     <td className="p-4 font-semibold">{fromUser?.username || 'Unknown'}</td>
                                                     <td className="p-4 font-semibold">{toUser?.username || 'Unknown'}</td>
                                                     <td className="p-4 text-slate-400 text-sm">{new Date(req.requestedAt).toLocaleDateString()}</td>
                                                     <td className="p-4 text-right space-x-2">
-                                                        <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.REJECTED)} className="px-3 py-1.5 text-xs bg-red-800/50 hover:bg-red-700/50 text-red-300 rounded font-semibold">Deny</button>
-                                                        <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.ACCEPTED)} className="px-3 py-1.5 text-xs bg-green-800/50 hover:bg-green-700/50 text-green-300 rounded font-semibold">Approve</button>
+                                                        <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.REJECTED)} className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded font-semibold">Deny</button>
+                                                        <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.ACCEPTED)} className="px-3 py-1.5 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded font-semibold">Approve</button>
                                                     </td>
                                                 </tr>
                                             )
@@ -445,9 +446,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 {chats.filter(c => c.type === ChatType.GROUP && c.id !== 'chat-announcements-global').map(group => {
                                     const creator = users.find(u => u.id === group.creatorId);
                                     return (
-                                        <div key={group.id} className="bg-slate-800 border border-slate-700 rounded-2xl p-5 flex flex-col">
+                                        <div key={group.id} className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-5 flex flex-col">
                                             <div className="flex items-center gap-4 mb-4">
-                                                 <div className="w-14 h-14 rounded-full bg-indigo-500 flex items-center justify-center text-2xl font-bold flex-shrink-0"><UsersIcon className="w-8 h-8"/></div>
+                                                 <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0"><UsersIcon className="w-8 h-8"/></div>
                                                  <div className="overflow-hidden">
                                                     <p className="font-bold text-lg truncate">{group.name}</p>
                                                     <p className="text-sm text-slate-400"> {group.members.length} Members</p>
@@ -458,9 +459,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                                 <p><strong className="text-slate-400">Password:</strong> {group.password ? 'Protected' : 'None'}</p>
                                             </div>
                                             <div className="mt-4 grid grid-cols-3 gap-2">
-                                                <button onClick={() => setViewingGroupChat(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><EyeIcon className="w-4 h-4" /> View</button>
-                                                <button onClick={() => openEditGroupModal(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
-                                                <button onClick={() => handleDeleteGroupConfirm(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-800/50 hover:bg-red-700/50 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button>
+                                                <button onClick={() => setViewingGroupChat(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><EyeIcon className="w-4 h-4" /> View</button>
+                                                <button onClick={() => openEditGroupModal(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
+                                                <button onClick={() => handleDeleteGroupConfirm(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button>
                                             </div>
                                         </div>
                                     );
@@ -475,7 +476,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             {/* --- Modals --- */}
             {(isEditUserModalOpen || isPasswordModalOpen || isEditGroupModalOpen) && (
                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-lg border border-slate-700/50 shadow-2xl flex flex-col">
+                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-2xl p-6 w-full max-w-lg border border-white/10 shadow-2xl flex flex-col">
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-white">
                                 {isEditUserModalOpen && `Edit ${selectedUser?.username}`}
@@ -487,7 +488,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         
                         {isEditUserModalOpen && selectedUser && (
                             <div>
-                                <div className="border-b border-slate-700 mb-4">
+                                <div className="border-b border-white/10 mb-4">
                                     <nav className="flex -mb-px">
                                         <button onClick={() => setModalView('profile')} className={`px-4 py-2 text-sm font-medium border-b-2 ${modalView === 'profile' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}>Profile</button>
                                         <button onClick={() => setModalView('connections')} className={`px-4 py-2 text-sm font-medium border-b-2 ${modalView === 'connections' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}>Connections</button>
@@ -497,33 +498,33 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                      <div className="space-y-4">
                                         <div>
                                             <label className="block text-sm font-medium text-slate-300 mb-1">Avatar (Emoji/Char)</label>
-                                            <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                            <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-300 mb-1">Bio</label>
-                                            <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                            <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-300 mb-1">Email Address</label>
-                                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                            <input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number</label>
-                                            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                            <input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                         </div>
                                         <div>
                                             <label className="block text-sm font-medium text-slate-300 mb-1">Daily Message Limit</label>
-                                            <input type="number" value={messageLimit === undefined ? '' : messageLimit} onChange={e => setMessageLimit(e.target.value === '' ? undefined : Number(e.target.value))} placeholder="Leave blank for unlimited" className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                            <input type="number" value={messageLimit === undefined ? '' : messageLimit} onChange={e => setMessageLimit(e.target.value === '' ? undefined : Number(e.target.value))} placeholder="Leave blank for unlimited" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                         </div>
                                     </div>
                                 ) : (
                                     <div className="space-y-4">
-                                        <div className="max-h-60 overflow-y-auto custom-scrollbar border border-slate-600 rounded-lg p-2 space-y-1">
+                                        <div className="max-h-60 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2 space-y-1">
                                             {connections.filter(c => c.fromUserId === selectedUser.id || c.toUserId === selectedUser.id).map(conn => {
                                                 const otherUserId = conn.fromUserId === selectedUser.id ? conn.toUserId : conn.fromUserId;
                                                 const otherUser = users.find(u => u.id === otherUserId);
                                                 return (
-                                                    <div key={conn.id} className="flex items-center justify-between p-2 rounded hover:bg-slate-700/50">
+                                                    <div key={conn.id} className="flex items-center justify-between p-2 rounded hover:bg-white/5">
                                                         <span className="font-semibold">{otherUser?.username || 'Unknown'}</span>
                                                         <div className="flex items-center gap-2">
                                                             <span className={`text-xs px-2 py-0.5 rounded-full ${conn.status === 'blocked' ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-300'}`}>{conn.status}</span>
@@ -541,14 +542,14 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                          <div>
                                             <label className="block text-sm font-medium text-slate-300 mb-1">Force Block User</label>
                                             <div className="flex gap-2">
-                                                <input type="text" value={blockUsername} onChange={e => setBlockUsername(e.target.value)} placeholder="Enter username to block" className="flex-grow bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                                <input type="text" value={blockUsername} onChange={e => setBlockUsername(e.target.value)} placeholder="Enter username to block" className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                                 <button onClick={handleAdminBlockUser} disabled={isSubmitting} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold disabled:bg-slate-600">Block</button>
                                             </div>
                                         </div>
                                     </div>
                                 )}
                                 <div className="mt-6 flex justify-end gap-3">
-                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
+                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
                                     {modalView === 'profile' && <button onClick={handleProfileUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>}
                                 </div>
                             </div>
@@ -558,10 +559,10 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                            <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-1">New Password for {selectedUser?.username}</label>
-                                    <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 </div>
                                 <div className="mt-6 flex justify-end gap-3">
-                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
+                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
                                     <button onClick={handlePasswordReset} disabled={!newPassword.trim() || isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed">{isSubmitting ? 'Resetting...' : 'Reset Password'}</button>
                                 </div>
                            </div>
@@ -571,18 +572,18 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                            <div className="space-y-4">
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-1">Group Name</label>
-                                    <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    <input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-1">Group Password (optional)</label>
-                                    <input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} placeholder="Leave blank for no password" className="w-full bg-slate-700 border border-slate-600 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    <input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} placeholder="Leave blank for no password" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-2">Manage Members</label>
-                                    <div className="max-h-40 overflow-y-auto custom-scrollbar border border-slate-600 rounded-lg p-2 space-y-1">
+                                    <div className="max-h-40 overflow-y-auto custom-scrollbar border border-white/10 rounded-lg p-2 space-y-1">
                                         {users.filter(u => !u.isAdmin).map(user => (
-                                            <div key={user.id} onClick={() => toggleGroupMember(user.id)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${groupMembers.includes(user.id) ? 'bg-blue-600' : 'hover:bg-slate-700'}`}>
-                                                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-sm font-bold flex-shrink-0">{user.avatar}</div>
+                                            <div key={user.id} onClick={() => toggleGroupMember(user.id)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${groupMembers.includes(user.id) ? 'bg-blue-600/50' : 'hover:bg-white/5'}`}>
+                                                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{user.avatar}</div>
                                                 <span className="font-semibold truncate flex-grow">{user.username}</span>
                                                 <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 ${groupMembers.includes(user.id) ? 'bg-blue-500 border-blue-400' : 'border-slate-500'}`}>
                                                     {groupMembers.includes(user.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="4" d="M5 13l4 4L19 7" /></svg>}
@@ -592,7 +593,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     </div>
                                 </div>
                                 <div className="mt-6 flex justify-end gap-3">
-                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-slate-600 hover:bg-slate-500 rounded-lg transition-colors font-semibold">Cancel</button>
+                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
                                     <button onClick={handleGroupUpdate} disabled={!groupName.trim() || isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
                                 </div>
                            </div>
