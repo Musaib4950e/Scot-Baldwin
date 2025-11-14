@@ -1,6 +1,7 @@
 import React, { useState, useReducer, useEffect } from 'react';
-import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType } from '../types';
+import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
 import GroupLocker from './GroupLocker';
+// FIX: Module '"file:///components/ChatRoom"' has no default export. Added default export to ChatRoom.tsx
 import ChatRoom from './ChatRoom';
 import AdminPanel from './AdminPanel';
 import { db } from './db';
@@ -33,11 +34,12 @@ const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [reports, setReports] = useState<Report[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
-    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData] = await Promise.all([
+    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
         db.getUsers(),
         db.getChats(),
         db.getMessages(),
@@ -45,6 +47,7 @@ const App: React.FC = () => {
         db.getLoggedInUsers(),
         db.getConnections(),
         db.getTransactions(),
+        db.getReports(),
     ]);
     setUsers(usersData);
     setChats(chatsData);
@@ -53,6 +56,7 @@ const App: React.FC = () => {
     setLoggedInUsers(loggedInUsersData);
     setConnections(connectionsData);
     setTransactions(transactionsData);
+    setReports(reportsData);
     setIsLoading(false);
   };
 
@@ -273,6 +277,17 @@ const App: React.FC = () => {
       await fetchData();
   };
 
+  const handleReportUser = async (reportedUserId: string, reason: string, chatId?: string) => {
+    if (!currentUser) return;
+    await db.addReport(currentUser.id, reportedUserId, reason, chatId);
+    await fetchData();
+  };
+
+  const handleUpdateReportStatus = async (reportId: string, status: Report['status']) => {
+    await db.updateReportStatus(reportId, status);
+    setReports(await db.getReports());
+  };
+
 
   if (isLoading) {
     return (
@@ -294,6 +309,7 @@ const App: React.FC = () => {
             messages={messages}
             connections={connections}
             transactions={transactions}
+            reports={reports}
             onLogout={handleLogout}
             onUpdateUserProfile={handleUpdateUserProfile}
             onResetUserPassword={handleResetUserPassword}
@@ -308,6 +324,7 @@ const App: React.FC = () => {
             onAdminUpdateVerification={handleAdminUpdateUserVerification}
             onAdminGrantFunds={handleAdminGrantFunds}
             onAdminUpdateUserFreezeStatus={handleAdminUpdateUserFreezeStatus}
+            onUpdateReportStatus={handleUpdateReportStatus}
           />
         ) : (
           <ChatRoom
@@ -337,6 +354,7 @@ const App: React.FC = () => {
             onPurchaseVerification={handlePurchaseVerification}
             onPurchaseCosmetic={handlePurchaseCosmetic}
             onEquipCustomization={handleEquipCustomization}
+            onReportUser={handleReportUser}
           />
         )
       ) : (

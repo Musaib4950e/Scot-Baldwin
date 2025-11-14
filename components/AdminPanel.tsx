@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction } from '../types';
+import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report } from '../types';
 import { db, MARKETPLACE_ITEMS } from './db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon, ExclamationTriangleIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 // Helper component for the visual badge selector
@@ -38,6 +38,7 @@ interface AdminPanelProps {
     messages: Message[];
     connections: Connection[];
     transactions: Transaction[];
+    reports: Report[];
     onLogout: () => Promise<void>;
     onUpdateUserProfile: (params: { userId: string, avatar: string, bio: string, email: string, phone: string, messageLimit?: number }) => Promise<void>;
     onResetUserPassword: (userId: string, newPass: string) => Promise<void>;
@@ -52,6 +53,7 @@ interface AdminPanelProps {
     onAdminUpdateVerification: (userId: string, verification: Partial<Verification>) => Promise<void>;
     onAdminGrantFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
     onAdminUpdateUserFreezeStatus: (userId: string, isFrozen: boolean, frozenUntil?: number) => Promise<void>;
+    onUpdateReportStatus: (reportId: string, status: Report['status']) => Promise<void>;
 }
 
 const AvatarWithBorder: React.FC<{ user: User, containerClasses: string, textClasses: string }> = ({ user, containerClasses, textClasses }) => {
@@ -105,9 +107,9 @@ const formatCurrency = (amount: number | null | undefined) => {
 };
 
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
-    const { currentUser, users, chats, messages, connections, transactions, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification, onAdminGrantFunds, onAdminUpdateUserFreezeStatus } = props;
+    const { currentUser, users, chats, messages, connections, transactions, reports, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification, onAdminGrantFunds, onAdminUpdateUserFreezeStatus, onUpdateReportStatus } = props;
     
-    const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests' | 'verification' | 'transactions' | 'wallets'>('dashboard');
+    const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests' | 'verification' | 'transactions' | 'wallets' | 'reports'>('dashboard');
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<Chat | null>(null);
     const [viewingGroupChat, setViewingGroupChat] = useState<Chat | null>(null);
@@ -159,6 +161,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
     const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
     const verificationRequests = useMemo(() => users.filter(u => u.verification?.status === 'pending'), [users]);
+    const pendingReports = useMemo(() => reports.filter(r => r.status === 'pending'), [reports]);
     
     const viewingGroupMessages = useMemo(() => {
         if (!viewingGroupChat) return [];
@@ -332,6 +335,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <button onClick={() => setView('wallets')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'wallets' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><WalletIcon className="w-6 h-6" /><span>Wallets</span></button>
                         <button onClick={() => setView('requests')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${view === 'requests' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><EnvelopeIcon className="w-6 h-6" /><span>Connections</span>{pendingRequests.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{pendingRequests.length}</span>}</button>
                         <button onClick={() => setView('verification')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${view === 'verification' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><CheckBadgeIcon className="w-6 h-6" /><span>Verification</span>{verificationRequests.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{verificationRequests.length}</span>}</button>
+                        <button onClick={() => setView('reports')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${view === 'reports' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><ExclamationTriangleIcon className="w-6 h-6" /><span>Reports</span>{pendingReports.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{pendingReports.length}</span>}</button>
                         <button onClick={() => setView('groups')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'groups' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><UsersIcon className="w-6 h-6" /><span>Groups</span></button>
                         <button onClick={() => setView('transactions')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'transactions' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><CurrencyDollarIcon className="w-6 h-6" /><span>Transaction Log</span></button>
                     </nav>
@@ -508,6 +512,42 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                              )}
                         </div>
                      )}
+                    {view === 'reports' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">User Reports</h1>
+                             <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left">
+                                        <thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">Reporter</th><th className="p-4">Reported</th><th className="p-4">Reason</th><th className="p-4">Date</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr></thead>
+                                        <tbody>
+                                            {reports.sort((a,b) => b.timestamp - a.timestamp).map(report => {
+                                                const reporter = users.find(u => u.id === report.reporterId);
+                                                const reported = users.find(u => u.id === report.reportedUserId);
+                                                const statusColor = report.status === 'pending' ? 'text-amber-400' : report.status === 'resolved' ? 'text-green-400' : 'text-slate-400';
+                                                return (
+                                                <tr key={report.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
+                                                    <td className="p-4 font-semibold">{reporter?.username || 'Unknown'}</td>
+                                                    <td className="p-4 font-semibold">{reported?.username || 'Unknown'}</td>
+                                                    <td className="p-4 text-slate-300 max-w-sm whitespace-pre-wrap">{report.reason}</td>
+                                                    <td className="p-4 text-slate-400">{new Date(report.timestamp).toLocaleString()}</td>
+                                                    <td className={`p-4 font-semibold capitalize ${statusColor}`}>{report.status}</td>
+                                                    <td className="p-4 text-right space-x-2">
+                                                        {report.status === 'pending' && (
+                                                            <>
+                                                                <button onClick={() => onUpdateReportStatus(report.id, 'resolved')} className="px-3 py-1.5 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded font-semibold">Resolve</button>
+                                                                <button onClick={() => onUpdateReportStatus(report.id, 'dismissed')} className="px-3 py-1.5 text-xs bg-slate-500/20 hover:bg-slate-500/30 text-slate-300 rounded font-semibold">Dismiss</button>
+                                                            </>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            )})}
+                                            {reports.length === 0 && (<tr><td colSpan={6} className="text-center p-8 text-slate-500">No reports have been filed.</td></tr>)}
+                                        </tbody>
+                                    </table>
+                                </div>
+                             </div>
+                        </div>
+                    )}
                     {view === 'groups' && ( <div><h1 className="text-4xl font-bold mb-8 text-white">Group Management</h1><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{chats.filter(c => c.type === ChatType.GROUP && c.id !== 'chat-announcements-global').map(group => { const creator = users.find(u => u.id === group.creatorId); return (<div key={group.id} className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-5 flex flex-col"><div className="flex items-center gap-4 mb-4"><div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0"><UsersIcon className="w-8 h-8"/></div><div className="overflow-hidden"><p className="font-bold text-lg truncate">{group.name}</p><p className="text-sm text-slate-400"> {group.members.length} Members</p></div></div><div className="space-y-3 text-sm text-slate-300 flex-grow mb-4"><p><strong className="text-slate-400">Created by:</strong> {creator?.username || 'Unknown'}</p><p><strong className="text-slate-400">Password:</strong> {group.password ? 'Protected' : 'None'}</p></div><div className="mt-4 grid grid-cols-3 gap-2"><button onClick={() => setViewingGroupChat(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><EyeIcon className="w-4 h-4" /> View</button><button onClick={() => openEditGroupModal(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button><button onClick={() => handleDeleteGroupConfirm(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button></div></div>); })}</div></div> )}
                     {view === 'transactions' && (
                          <div>

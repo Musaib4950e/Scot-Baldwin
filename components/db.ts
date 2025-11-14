@@ -1,7 +1,7 @@
-import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, TransactionType } from '../types';
+import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, TransactionType, Report } from '../types';
 
 const DB_NAME = 'bakko-db';
-const DB_VERSION = 3; // Incremented version for schema change
+const DB_VERSION = 4; // Incremented version for schema change
 const DB_UPDATE_KEY = 'bakko-db-update';
 
 
@@ -12,6 +12,7 @@ const MESSAGES_STORE = 'messages';
 const SESSION_STORE = 'session';
 const CONNECTIONS_STORE = 'connections';
 const TRANSACTIONS_STORE = 'transactions';
+const REPORTS_STORE = 'reports';
 const ANNOUNCEMENT_CHAT_ID = 'chat-announcements-global';
 
 // NEW: Marketplace items definition
@@ -94,6 +95,11 @@ class Database {
                 if (!db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
                     const transactionsStore = db.createObjectStore(TRANSACTIONS_STORE, { keyPath: 'id' });
                     transactionsStore.createIndex('by-user', ['fromUserId', 'toUserId'], { unique: false });
+                }
+                if (!db.objectStoreNames.contains(REPORTS_STORE)) {
+                    const reportsStore = db.createObjectStore(REPORTS_STORE, { keyPath: 'id' });
+                    reportsStore.createIndex('by-reporter', 'reporterId', { unique: false });
+                    reportsStore.createIndex('by-reported', 'reportedUserId', { unique: false });
                 }
             };
         });
@@ -205,6 +211,12 @@ class Database {
         const db = await this.dbPromise;
         return promisifyRequest(db.transaction(TRANSACTIONS_STORE, 'readonly').objectStore(TRANSACTIONS_STORE).getAll());
     };
+    
+    getReports = async (): Promise<Report[]> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        return promisifyRequest(db.transaction(REPORTS_STORE, 'readonly').objectStore(REPORTS_STORE).getAll());
+    }
 
     isUserLoggedIn = (): boolean => !!this.sessionState.currentUserId;
     
@@ -662,6 +674,7 @@ class Database {
         const userStore = tx.objectStore(USERS_STORE);
         const transactionStore = tx.objectStore(TRANSACTIONS_STORE);
 
+        // FIX: Define fromUserReq and toUserReq before using them.
         const fromUserReq = userStore.get(fromUserId);
         const toUserReq = userStore.get(toUserId);
 
@@ -672,7 +685,8 @@ class Database {
                 resolve({ success: true, message: 'Transfer successful!' });
             };
 
-            Promise.all([promisifyRequest(fromUserReq), promisifyRequest(toUserReq)]).then(([fromUser, toUser]) => {
+            // FIX: Add types for fromUser and toUser to resolve property access errors.
+            Promise.all([promisifyRequest(fromUserReq), promisifyRequest(toUserReq)]).then(([fromUser, toUser]: [User | undefined, User | undefined]) => {
                 if (!fromUser || !toUser) {
                     tx.abort();
                     return resolve({ success: false, message: 'User not found.' });
@@ -864,6 +878,43 @@ class Database {
         await new Promise<void>(r => tx.oncomplete = () => r());
         this.notifyDataChanged();
     }
+    
+    addReport = async (reporterId: string, reportedUserId: string, reason: string, chatIdAtTimeOfReport?: string): Promise<Report> => {
+        await this.isInitialized;
+        const newReport: Report = {
+            id: `report-${Date.now()}`,
+            reporterId,
+            reportedUserId,
+            reason,
+            timestamp: Date.now(),
+            status: 'pending',
+            chatIdAtTimeOfReport
+        };
+        const db = await this.dbPromise;
+        const tx = db.transaction(REPORTS_STORE, 'readwrite');
+        tx.objectStore(REPORTS_STORE).add(newReport);
+        await new Promise<void>(resolve => tx.oncomplete = () => resolve());
+        
+        // Announce the report
+        await this.addBroadcastAnnouncement("A new user report has been filed. Admins, please review in the Reports panel.", "user-admin-001");
+
+        this.notifyDataChanged();
+        return newReport;
+    };
+    
+    updateReportStatus = async (reportId: string, status: Report['status']): Promise<void> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction(REPORTS_STORE, 'readwrite');
+        const store = tx.objectStore(REPORTS_STORE);
+        const report = await promisifyRequest(store.get(reportId));
+        if (report) {
+            report.status = status;
+            store.put(report);
+        }
+        await new Promise<void>(resolve => tx.oncomplete = () => resolve());
+        this.notifyDataChanged();
+    };
 }
 
 export const db = new Database();

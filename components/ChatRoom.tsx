@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon, ChatBubbleLeftRightIcon, PaintBrushIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon, ChatBubbleLeftRightIcon, PaintBrushIcon, FlagIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db, MARKETPLACE_ITEMS } from './db';
 
@@ -27,6 +27,7 @@ interface ChatRoomProps {
   onPurchaseVerification: (badgeType: VerificationBadgeType, duration: number | 'permanent', cost: number) => Promise<{success: boolean, message: string}>;
   onPurchaseCosmetic: (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => Promise<{success: boolean, message: string}>;
   onEquipCustomization: (type: 'border' | 'nameColor', itemId: string | undefined) => Promise<void>;
+  onReportUser: (reportedUserId: string, reason: string, chatId?: string) => Promise<void>;
 }
 
 // --- Helper Components & Functions ---
@@ -576,18 +577,20 @@ const ProfileModal: React.FC<{
 
 // FIX: Added the missing ChatRoom component and its default export.
 const ChatRoom: React.FC<ChatRoomProps> = (props) => {
-    const { currentUser, users, chats, messages, connections, transactions, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization } = props;
+    const { currentUser, users, chats, messages, connections, transactions, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, onReportUser } = props;
     
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [newMessage, setNewMessage] = useState('');
     const [sidebarView, setSidebarView] = useState<'chats' | 'users' | 'requests'>('chats');
     const [searchTerm, setSearchTerm] = useState('');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-    const [isNewGroupModalOpen, setIsNewGroupModalOpen] = useState(false);
-    
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
+    const [userToReport, setUserToReport] = useState<User | null>(null);
+    const [reportReason, setReportReason] = useState('');
+
     const messagesEndRef = useRef<HTMLDivElement>(null);
     
-    const isAccountFrozen = currentUser.isFrozen && (!currentUser.frozenUntil || currentUser.frozenUntil > Date.now());
+    const isAccountFrozen = !!currentUser.isFrozen && (!currentUser.frozenUntil || currentUser.frozenUntil > Date.now());
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -620,6 +623,57 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         setActiveChatId(newChat.id);
         setSidebarView('chats');
     };
+
+    const handleOpenReportModal = (user: User) => {
+        setUserToReport(user);
+        setIsReportModalOpen(true);
+    };
+
+    const handleReportSubmit = async () => {
+        if (!userToReport || !reportReason.trim()) return;
+        await onReportUser(userToReport.id, reportReason.trim(), activeChatId || undefined);
+        setReportReason('');
+        setIsReportModalOpen(false);
+        setUserToReport(null);
+        alert('Report submitted. An admin will review it shortly.');
+    };
+
+    const ConnectionStatusBar: React.FC<{otherUser: User}> = ({otherUser}) => {
+        const connection = useMemo(() => {
+            return connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === otherUser.id) || (c.fromUserId === otherUser.id && c.toUserId === currentUser.id));
+        }, [connections, currentUser, otherUser]);
+
+        if (!connection) {
+            return (
+                <div className="p-2 bg-slate-800/50 text-center text-sm flex items-center justify-center gap-4">
+                    <span>You are not connected.</span>
+                    <button onClick={() => onSendRequest(otherUser.id)} className="px-3 py-1 bg-blue-600 hover:bg-blue-500 rounded font-semibold text-xs">Send Request</button>
+                </div>
+            );
+        }
+
+        switch(connection.status) {
+            case ConnectionStatus.PENDING:
+                if (connection.fromUserId === currentUser.id) {
+                    return <div className="p-2 bg-slate-800/50 text-center text-sm text-amber-300">Connection request sent. Waiting for response.</div>;
+                }
+                return (
+                    <div className="p-2 bg-slate-800/50 text-center text-sm text-amber-300 flex items-center justify-center gap-4">
+                        <span>{otherUser.username} sent you a connection request.</span>
+                        <button onClick={() => onUpdateConnection(connection.id, ConnectionStatus.ACCEPTED)} className="px-3 py-1 bg-green-600 hover:bg-green-500 rounded font-semibold text-xs">Accept</button>
+                        <button onClick={() => onUpdateConnection(connection.id, ConnectionStatus.REJECTED)} className="px-3 py-1 bg-red-600 hover:bg-red-500 rounded font-semibold text-xs">Decline</button>
+                    </div>
+                );
+            case ConnectionStatus.REJECTED:
+                return <div className="p-2 bg-slate-800/50 text-center text-sm text-red-400">Connection request declined.</div>;
+            case ConnectionStatus.BLOCKED:
+                return <div className="p-2 bg-slate-800/50 text-center text-sm text-red-400">You cannot chat with this user.</div>;
+            case ConnectionStatus.ACCEPTED:
+                 return null; // Don't show anything if accepted
+            default:
+                return null;
+        }
+    }
     
     const Sidebar = () => (
         <aside className="w-80 flex-shrink-0 bg-black/20 backdrop-blur-2xl p-4 flex flex-col border-r border-white/10">
@@ -680,44 +734,62 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         
         const otherUser = activeChat.type === 'dm' ? users.find(u => u.id === activeChat.members.find(id => id !== currentUser.id)) : null;
         
+        const connection = useMemo(() => {
+            if (!otherUser) return null;
+            return connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === otherUser.id) || (c.fromUserId === otherUser.id && c.toUserId === currentUser.id));
+        }, [connections, currentUser, otherUser]);
+        
+        const canSendMessage = activeChat.type === 'group' || (connection && connection.status === ConnectionStatus.ACCEPTED);
+
         return (
             <div className="flex-grow flex flex-col h-screen">
                 <header className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0 bg-black/10 backdrop-blur-2xl z-10">
                     {activeChat.type === 'dm' && otherUser ? <AvatarWithBorder user={otherUser} containerClasses="w-12 h-12" textClasses="text-xl" statusClasses="w-3.5 h-3.5 bottom-0 right-0" /> : <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0"><UsersIcon className="w-6 h-6"/></div>}
                     <div>
-                        <div className="flex items-center gap-2"><h2 className="text-xl font-bold">{getChatDisplayName(activeChat, currentUser, users)}</h2>{otherUser && renderUserBadge(otherUser, 'large')}</div>
-                        <p className="text-xs text-slate-400">{activeChat.type === 'dm' && otherUser ? (otherUser.online ? 'Online' : 'Offline') : `${activeChat.members.length} members`}</p>
+                        <h2 className="text-xl font-bold">{getChatDisplayName(activeChat, currentUser, users)}</h2>
+                        {otherUser && <p className="text-xs text-slate-400">{otherUser.online ? 'Online' : 'Offline'}</p>}
                     </div>
+                    {otherUser && (
+                        <div className="ml-auto flex items-center gap-2">
+                            {otherUser.instagramUsername && <a href={`https://instagram.com/${otherUser.instagramUsername}`} target="_blank" rel="noopener noreferrer" className="p-2 text-slate-400 hover:text-white"><InstagramIcon/></a>}
+                            <button onClick={() => handleOpenReportModal(otherUser)} className="p-2 text-slate-400 hover:text-red-400" title="Report User"><FlagIcon/></button>
+                        </div>
+                    )}
                 </header>
-                <div className="flex-grow p-6 overflow-y-auto space-y-6 custom-scrollbar">
-                    {activeChatMessages.map(msg => {
+                
+                {otherUser && <ConnectionStatusBar otherUser={otherUser} />}
+
+                <div className="flex-grow p-6 overflow-y-auto space-y-6 custom-scrollbar" ref={messagesEndRef}>
+                    {activeChatMessages.length > 0 ? activeChatMessages.map(msg => {
+                        if (msg.type === 'announcement' && msg.chatId !== 'chat-announcements-global') return null; // Only show global announcements here
                         const author = users.find(u => u.id === msg.authorId);
                         if (!author) return null;
-                        return <ChatMessage key={msg.id} message={msg} author={author} isCurrentUser={msg.authorId === currentUser.id} isGroupChat={activeChat.type === 'group'} />
-                    })}
-                    <div ref={messagesEndRef} />
+                        return <ChatMessage key={msg.id} message={msg} author={author} isCurrentUser={msg.authorId === currentUser.id} isGroupChat={activeChat.type === 'group'} />;
+                    }) : <div className="text-center text-slate-500 mt-8">No messages yet.</div>}
                 </div>
-                <div className="p-4 flex-shrink-0">
-                    <form onSubmit={handleMessageSend} className="relative">
-                        <textarea value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder={isAccountFrozen ? "Your account is frozen. You cannot send messages." : "Type a message..."} className="w-full bg-white/10 border border-transparent rounded-2xl p-4 pr-16 text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none" rows={1} disabled={isAccountFrozen}></textarea>
-                        <button type="submit" className="absolute top-1/2 right-4 -translate-y-1/2 p-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-full transition-transform hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70" disabled={!newMessage.trim() || isAccountFrozen}>
-                            <PaperAirplaneIcon className="w-6 h-6" />
-                        </button>
-                    </form>
-                </div>
+
+                {canSendMessage && !isAccountFrozen && (
+                    <div className="p-4 border-t border-white/10 bg-black/10 backdrop-blur-2xl">
+                        <form onSubmit={handleMessageSend} className="flex items-center gap-4">
+                            <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Type a message..." className="flex-grow bg-white/5 border border-white/10 rounded-full py-2.5 px-5 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
+                            <button type="submit" className="p-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-full transition-transform hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70" disabled={!newMessage.trim()}><PaperAirplaneIcon className="w-6 h-6" /></button>
+                        </form>
+                    </div>
+                )}
+                {isAccountFrozen && (
+                    <div className="p-4 border-t border-white/10 bg-red-900/30 text-center text-red-300 font-semibold text-sm">
+                        <p>Your account is frozen. You cannot send messages.</p>
+                    </div>
+                )}
             </div>
-        )
+        );
     };
 
     return (
-        <>
-            <div className="flex h-screen bg-black/30 text-white font-sans">
-                <Sidebar />
-                <main className="flex-1 flex flex-col">
-                    <ChatArea />
-                </main>
-            </div>
-            <ProfileModal 
+        <div className="flex h-screen w-full font-sans overflow-hidden animated-gradient-background">
+            <Sidebar />
+            <ChatArea />
+            <ProfileModal
                 isOpen={isProfileModalOpen}
                 onClose={() => setIsProfileModalOpen(false)}
                 currentUser={currentUser}
@@ -729,10 +801,23 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 onPurchaseVerification={onPurchaseVerification}
                 onPurchaseCosmetic={onPurchaseCosmetic}
                 onEquipCustomization={onEquipCustomization}
-                isAccountFrozen={!!isAccountFrozen}
+                isAccountFrozen={isAccountFrozen}
             />
-        </>
+             <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)}>
+                <h2 className="text-2xl font-bold mb-4">Report {userToReport?.username}</h2>
+                <textarea
+                    value={reportReason}
+                    onChange={(e) => setReportReason(e.target.value)}
+                    rows={4}
+                    placeholder="Please provide a reason for the report..."
+                    className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                />
+                <div className="flex justify-end gap-3">
+                    <button onClick={() => setIsReportModalOpen(false)} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
+                    <button onClick={handleReportSubmit} disabled={!reportReason.trim()} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg font-semibold disabled:opacity-50">Submit Report</button>
+                </div>
+            </Modal>
+        </div>
     );
 };
-
 export default ChatRoom;

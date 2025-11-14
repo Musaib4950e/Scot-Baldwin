@@ -92,3 +92,13 @@ export interface Transaction {
   timestamp: number;
   description: string;
 }
+
+export interface Report {
+  id: string;
+  reporterId: string;
+  reportedUserId: string;
+  reason: string;
+  timestamp: number;
+  status: 'pending' | 'resolved' | 'dismissed';
+  chatIdAtTimeOfReport?: string;
+}
