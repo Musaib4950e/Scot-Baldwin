@@ -61,18 +61,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    
-    const handleBeforeUnload = () => {
-        if (db.isUserLoggedIn()) {
-            db.logout();
-        }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-
-    return () => {
-        window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
   }, []);
 
   useEffect(() => {
