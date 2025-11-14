@@ -101,18 +101,21 @@ class Database {
             verificationStatus: 'approved',
             bio: 'The administrator of BAK-Ko.'
         };
+
         const getRequest = store.get(adminUser.id);
-        let added = false;
         
         return new Promise<void>((resolve, reject) => {
+            // We'll always `put` the latest version of the admin user to ensure it's up-to-date.
+            // But we need to preserve the `online` status if the user is already logged in.
             getRequest.onsuccess = () => {
-                if (!getRequest.result) {
-                    store.add(adminUser);
-                    added = true;
+                const existingAdmin = getRequest.result;
+                if (existingAdmin) {
+                    adminUser.online = existingAdmin.online; // Preserve online status
                 }
-            };
+                store.put(adminUser);
+            }
             tx.oncomplete = () => {
-                if (added) this.notifyDataChanged();
+                this.notifyDataChanged(); // Notify in case of update
                 resolve();
             };
             tx.onerror = () => reject(tx.error);
