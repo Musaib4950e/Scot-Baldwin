@@ -1,11 +1,12 @@
 
+
 import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
 import GroupLocker from './GroupLocker';
 import ChatRoom from './ChatRoom';
 // FIX: Changed to a named import as AdminPanel does not have a default export.
 import { AdminPanel } from './AdminPanel';
-import { db } from './supabaseDb';
+import { db } from './db';
 
 interface CreateGroupChatParams {
   memberIds: string[];
@@ -29,7 +30,6 @@ interface UpdateGroupDetailsParams {
 
 
 const App: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true);
   const [users, setUsers] = useState<User[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -40,34 +40,28 @@ const App: React.FC = () => {
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
-    try {
-      const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
-          db.getUsers(),
-          db.getChats(),
-          db.getMessages(),
-          db.getCurrentUser(),
-          db.getLoggedInUsers(),
-          db.getConnections(),
-          db.getTransactions(),
-          db.getReports(),
-      ]);
-      setUsers(usersData);
-      setChats(chatsData);
-      setMessages(messagesData);
-      setCurrentUser(currentUserData);
-      setLoggedInUsers(loggedInUsersData);
-      setConnections(connectionsData);
-      setTransactions(transactionsData);
-      setReports(reportsData);
-      setIsLoading(false);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setIsLoading(false);
-    }
+    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
+        db.getUsers(),
+        db.getChats(),
+        db.getMessages(),
+        db.getCurrentUser(),
+        db.getLoggedInUsers(),
+        db.getConnections(),
+        db.getTransactions(),
+        db.getReports(),
+    ]);
+    setUsers(usersData);
+    setChats(chatsData);
+    setMessages(messagesData);
+    setCurrentUser(currentUserData);
+    setLoggedInUsers(loggedInUsersData);
+    setConnections(connectionsData);
+    setTransactions(transactionsData);
+    setReports(reportsData);
   };
 
   useEffect(() => {
-    db.initialize().then(() => fetchData());
+    fetchData();
   }, []);
 
 
@@ -274,15 +268,6 @@ const App: React.FC = () => {
     setReports(await db.getReports());
   };
 
-
-  if (isLoading) {
-    return (
-        <div className="animated-gradient text-white min-h-screen w-full flex flex-col items-center justify-center">
-            <h1 className="text-5xl md:text-7xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-300 mb-4 animate-pulse">BAK -Ko</h1>
-            <p className="text-lg text-slate-400">Initializing secure session...</p>
-        </div>
-    )
-  }
 
   return (
     <div className="text-white min-h-screen w-full font-sans overflow-hidden">
