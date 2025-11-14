@@ -12,6 +12,8 @@ export interface User {
   messageLimit?: number; // Daily message limit, admin controlled
   recoveryToken?: string; // For password recovery
   recoveryTokenExpiry?: number; // Expiry timestamp for the token
+  isVerified?: boolean; // For verification badge
+  verificationStatus?: 'none' | 'pending' | 'approved'; // Verification request status
 }
 
 export interface Message {

@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus } from '../types';
 import { db } from './db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 
@@ -24,12 +24,13 @@ interface AdminPanelProps {
     onDeleteConnection: (connectionId: string) => Promise<void>;
     onBroadcastAnnouncement: (text: string) => Promise<void>;
     onAdminForceConnectionStatus: (fromUserId: string, toUserId: string, status: ConnectionStatus) => Promise<void>;
+    onAdminUpdateVerification: (userId: string, status: 'approved' | 'none') => Promise<void>;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
-    const { currentUser, users, chats, messages, connections, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus } = props;
+    const { currentUser, users, chats, messages, connections, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification } = props;
     
-    const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests'>('dashboard');
+    const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests' | 'verification'>('dashboard');
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
     const [selectedGroup, setSelectedGroup] = useState<Chat | null>(null);
     const [viewingGroupChat, setViewingGroupChat] = useState<Chat | null>(null);
@@ -60,6 +61,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [isBroadcasting, setIsBroadcasting] = useState(false);
 
     const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
+    const verificationRequests = useMemo(() => users.filter(u => u.verificationStatus === 'pending'), [users]);
     
     const viewingGroupMessages = useMemo(() => {
         if (!viewingGroupChat) return [];
@@ -266,7 +268,10 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-2xl font-bold">{currentUser.avatar}</div>
                         </div>
                         <div className="overflow-hidden">
-                            <h2 className="font-bold text-lg truncate">{currentUser.username}</h2>
+                            <div className="flex items-center gap-1.5">
+                                <h2 className="font-bold text-lg truncate">{currentUser.username}</h2>
+                                {currentUser.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+                            </div>
                             <p className="text-sm text-blue-300 flex items-center gap-1.5"><ShieldCheckIcon className="w-4 h-4" /> Administrator</p>
                         </div>
                     </div>
@@ -281,8 +286,13 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </button>
                          <button onClick={() => setView('requests')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${view === 'requests' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}>
                             <EnvelopeIcon className="w-6 h-6" />
-                            <span>Requests</span>
+                            <span>Connections</span>
                             {pendingRequests.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{pendingRequests.length}</span>}
+                        </button>
+                        <button onClick={() => setView('verification')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 relative ${view === 'verification' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}>
+                            <CheckBadgeIcon className="w-6 h-6" />
+                            <span>Verification</span>
+                            {verificationRequests.length > 0 && <span className="absolute top-2 right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{verificationRequests.length}</span>}
                         </button>
                         <button onClick={() => setView('groups')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'groups' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}>
                             <UsersIcon className="w-6 h-6" />
@@ -378,7 +388,10 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         <div className="flex items-center gap-4 mb-4">
                                             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0">{user.avatar}</div>
                                             <div className="overflow-hidden">
-                                                <p className="font-bold text-lg truncate">{user.username}</p>
+                                                <div className="flex items-center gap-1.5">
+                                                    <p className="font-bold text-lg truncate">{user.username}</p>
+                                                    {user.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+                                                </div>
                                                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${user.online ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}>
                                                     <span className={`h-1.5 w-1.5 rounded-full ${user.online ? 'bg-green-500' : 'bg-slate-500'}`}></span>
                                                     {user.online ? 'Online' : 'Offline'}
@@ -431,6 +444,41 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         }) : (
                                             <tr>
                                                 <td colSpan={4} className="text-center p-8 text-slate-500">No pending requests.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                             </div>
+                        </div>
+                    )}
+                    
+                    {view === 'verification' && (
+                        <div>
+                             <h1 className="text-4xl font-bold mb-8 text-white">Verification Requests</h1>
+                             <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl">
+                                <table className="w-full text-left">
+                                    <thead className="border-b border-white/10 text-sm text-slate-400">
+                                        <tr>
+                                            <th className="p-4">User</th>
+                                            <th className="p-4">Email</th>
+                                            <th className="p-4">Date Registered</th>
+                                            <th className="p-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {verificationRequests.length > 0 ? verificationRequests.map(user => (
+                                            <tr key={user.id} className="border-b border-white/10 hover:bg-white/5">
+                                                <td className="p-4 font-semibold">{user.username}</td>
+                                                <td className="p-4 text-slate-400">{user.email || 'N/A'}</td>
+                                                <td className="p-4 text-slate-400 text-sm">{new Date(parseInt(user.id.split('-')[1])).toLocaleDateString()}</td>
+                                                <td className="p-4 text-right space-x-2">
+                                                    <button onClick={() => onAdminUpdateVerification(user.id, 'none')} className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded font-semibold">Reject</button>
+                                                    <button onClick={() => onAdminUpdateVerification(user.id, 'approved')} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Approve</button>
+                                                </td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={4} className="text-center p-8 text-slate-500">No pending verification requests.</td>
                                             </tr>
                                         )}
                                     </tbody>

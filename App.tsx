@@ -72,6 +72,21 @@ const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleStorageChange = (event: StorageEvent) => {
+        if (event.key === 'bakko-db-update') {
+            // Data has been updated in another tab, refetch to sync UI
+            fetchData();
+        }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+        window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
 
   const handleLogin = async (user: User) => {
     const loggedInUser = await db.login(user);
@@ -172,6 +187,17 @@ const App: React.FC = () => {
       setConnections(await db.getConnections());
   };
   
+  // --- Verification Handlers ---
+  const handleRequestVerification = async (userId: string) => {
+    await db.updateUserVerification(userId, 'pending');
+    await fetchData();
+  };
+
+  const handleAdminUpdateVerification = async (userId: string, status: 'approved' | 'none') => {
+    await db.updateUserVerification(userId, status);
+    await fetchData();
+  };
+
   // --- Admin Handlers ---
   const handleBroadcastAnnouncement = async (text: string) => {
     if (!currentUser || !currentUser.isAdmin) return;
@@ -217,6 +243,7 @@ const App: React.FC = () => {
             onDeleteConnection={handleDeleteConnection}
             onBroadcastAnnouncement={handleBroadcastAnnouncement}
             onAdminForceConnectionStatus={handleAdminForceConnectionStatus}
+            onAdminUpdateVerification={handleAdminUpdateVerification}
           />
         ) : (
           <ChatRoom
@@ -234,6 +261,8 @@ const App: React.FC = () => {
             onLogin={handleLogin}
             onSendRequest={handleSendRequest}
             onUpdateConnection={handleUpdateConnection}
+            onRequestVerification={handleRequestVerification}
+            onUpdateUserProfile={(params) => handleUpdateUserProfile({ ...params, userId: currentUser.id })}
           />
         )
       ) : (

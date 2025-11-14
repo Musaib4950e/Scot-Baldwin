@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Message, User } from '../types';
-import { MegaphoneIcon } from './icons';
+import { CheckBadgeIcon, MegaphoneIcon } from './icons';
 
 interface ChatMessageProps {
   message: Message;
@@ -59,7 +59,10 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
       )}
       <div className={`flex flex-col max-w-lg lg:max-w-xl ${isCurrentUser ? 'items-end' : 'items-start'}`}>
          {isGroupChat && !isCurrentUser && (
-            <p className="text-xs text-cyan-300 mb-1 ml-3 font-semibold">{author.username}</p>
+            <div className="flex items-center gap-1.5 mb-1 ml-3">
+              <p className="text-xs text-cyan-300 font-semibold">{author.username}</p>
+              {author.isVerified && <CheckBadgeIcon className="w-3.5 h-3.5 text-blue-400" />}
+            </div>
          )}
         <div
           className={`px-4 py-2.5 shadow-md text-white ${

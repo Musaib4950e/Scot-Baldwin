@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User, Connection } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db } from './db';
 
@@ -22,6 +22,8 @@ interface ChatRoomProps {
   onLogin: (user: User) => Promise<void>;
   onSendRequest: (toUserId: string) => Promise<void>;
   onUpdateConnection: (connectionId: string, status: ConnectionStatus) => Promise<void>;
+  onRequestVerification: (userId: string) => Promise<void>;
+  onUpdateUserProfile: (params: { avatar: string, bio: string }) => Promise<void>;
 }
 
 // --- Helper Functions ---
@@ -63,6 +65,83 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.Re
         </div>
     );
 }
+
+// --- Profile Settings Modal ---
+const ProfileSettingsModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    currentUser: User;
+    onUpdateProfile: (params: { avatar: string, bio: string }) => Promise<void>;
+    onRequestVerification: (userId: string) => Promise<void>;
+}> = ({ isOpen, onClose, currentUser, onUpdateProfile, onRequestVerification }) => {
+    const [avatar, setAvatar] = useState(currentUser.avatar);
+    const [bio, setBio] = useState(currentUser.bio || '');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+      setAvatar(currentUser.avatar);
+      setBio(currentUser.bio || '');
+    }, [currentUser]);
+
+    const handleUpdate = async () => {
+        setIsSubmitting(true);
+        await onUpdateProfile({ avatar, bio });
+        setIsSubmitting(false);
+        onClose();
+    };
+    
+    const handleRequest = async () => {
+        setIsSubmitting(true);
+        await onRequestVerification(currentUser.id);
+        setIsSubmitting(false);
+    };
+    
+    const renderVerificationStatus = () => {
+        switch (currentUser.verificationStatus) {
+            case 'approved':
+                return <p className="text-sm text-center text-blue-300 flex items-center justify-center gap-2 bg-blue-500/10 p-3 rounded-lg">
+                    <CheckBadgeIcon className="w-5 h-5"/> You are verified.
+                </p>;
+            case 'pending':
+                return <p className="text-sm text-center text-amber-300 bg-amber-500/10 p-3 rounded-lg">Your verification request is pending.</p>;
+            default:
+                return <button onClick={handleRequest} disabled={isSubmitting} className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">
+                    {isSubmitting ? 'Submitting...' : 'Request Verification'}
+                </button>;
+        }
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose}>
+             <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold text-white">Profile & Settings</h2>
+                <button onClick={onClose} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10 transition-colors"><XMarkIcon /></button>
+            </div>
+            <div className="space-y-4">
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Avatar (Emoji/Char)</label>
+                    <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-1">Bio</label>
+                    <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                 <div className="border-t border-white/10 my-4"></div>
+                <div>
+                    <h3 className="text-lg font-semibold mb-3 text-slate-300">Verification</h3>
+                    {renderVerificationStatus()}
+                </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+                <button onClick={onClose} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
+                <button onClick={handleUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">
+                    {isSubmitting ? 'Saving...' : 'Save Changes'}
+                </button>
+            </div>
+        </Modal>
+    );
+};
+
 
 // --- Add Account Modal ---
 const AddAccountModal: React.FC<{
@@ -116,7 +195,7 @@ const AddAccountModal: React.FC<{
 
 // --- Main Component ---
 const ChatRoom: React.FC<ChatRoomProps> = (props) => {
-  const { currentUser, users, chats, messages, connections, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection } = props;
+  const { currentUser, users, chats, messages, connections, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile } = props;
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
@@ -138,6 +217,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false);
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   const incomingRequests = useMemo(() => {
       return connections.filter(c => c.toUserId === currentUser.id && c.status === ConnectionStatus.PENDING);
@@ -291,6 +371,11 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     setIsAccountSwitcherOpen(false);
     setIsAddAccountModalOpen(true);
   };
+
+  const handleOpenProfileSettings = () => {
+    setIsAccountSwitcherOpen(false);
+    setIsProfileModalOpen(true);
+  };
   
   const handleSwitchAccount = async (userId: string) => {
     if (userId === currentUser.id) return;
@@ -414,6 +499,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         </Modal>
 
       <AddAccountModal isOpen={isAddAccountModalOpen} onClose={() => setIsAddAccountModalOpen(false)} onLoginSuccess={onLogin} />
+      <ProfileSettingsModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} currentUser={currentUser} onUpdateProfile={onUpdateUserProfile} onRequestVerification={onRequestVerification} />
       
       <div className="h-screen flex bg-black/20">
       {/* Sidebar - Chat List */}
@@ -427,7 +513,10 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-black/30 ${currentUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
               </div>
               <div className="flex-grow overflow-hidden">
-                  <span className="font-semibold text-lg truncate block">{currentUser.username}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-semibold text-lg truncate block">{currentUser.username}</span>
+                    {currentUser.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
+                  </div>
                   {currentUser.bio && <span className="text-xs text-slate-400 truncate block">{currentUser.bio}</span>}
               </div>
               <ChevronDownIcon className={`w-5 h-5 text-slate-400 flex-shrink-0 transition-transform ${isAccountSwitcherOpen ? 'rotate-180' : ''}`} />
@@ -437,11 +526,18 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                     {loggedInUsers.map(user => (
                         <button key={user.id} onClick={() => handleSwitchAccount(user.id)} className="w-full flex items-center gap-3 p-2 rounded-md text-left hover:bg-cyan-500/20 transition-colors">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-base font-bold flex-shrink-0">{user.avatar}</div>
-                            <span className="font-semibold truncate flex-grow">{user.username}</span>
+                             <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
+                                <span className="font-semibold truncate">{user.username}</span>
+                                {user.isVerified && <CheckBadgeIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                            </div>
                             {user.id === currentUser.id && <CheckCircleIcon className="w-6 h-6 text-cyan-400 flex-shrink-0" />}
                         </button>
                     ))}
                     <div className="border-t border-white/10 my-1 !mt-2 !mb-2"></div>
+                     <button onClick={handleOpenProfileSettings} className="w-full flex items-center gap-3 p-2 rounded-md text-left text-slate-300 hover:bg-white/10 transition-colors">
+                        <PencilIcon className="w-8 h-8 p-1.5 flex-shrink-0" />
+                        <span className="font-semibold">Profile & Settings</span>
+                    </button>
                     <button onClick={handleOpenAddAccount} className="w-full flex items-center gap-3 p-2 rounded-md text-left text-slate-300 hover:bg-white/10 transition-colors">
                         <UserPlusIcon className="w-8 h-8 p-1 flex-shrink-0" />
                         <span className="font-semibold">Add Account</span>
@@ -508,7 +604,10 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{user.avatar}</div>
                                 <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-900/50 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
                             </div>
-                             <span className="font-semibold truncate flex-grow">{user.username}</span>
+                            <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
+                                <span className="font-semibold truncate">{user.username}</span>
+                                {user.isVerified && <CheckBadgeIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />}
+                            </div>
                              {renderSearchUserActions(user)}
                         </div>
                     ))
@@ -542,6 +641,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                   <div className="flex-grow overflow-hidden">
                     <div className="flex items-center gap-2">
                         <h3 className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</h3>
+                        {otherUser?.isVerified && <CheckBadgeIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />}
                         {chat.password && <LockClosedIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />}
                     </div>
                     <p className="text-sm text-slate-400 truncate">{lastMessage?.text || 'No messages yet'}</p>
@@ -578,6 +678,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 <div className='flex-grow overflow-hidden'>
                     <div className="flex items-center gap-2">
                         <h2 className="text-xl font-bold truncate">{getChatDisplayName(activeChat, currentUser, users)}</h2>
+                        {otherUserInDM?.isVerified && <CheckBadgeIcon className="w-5 h-5 text-blue-400 flex-shrink-0" />}
                         {otherUserInDM?.instagramUsername && (
                             <a 
                                 href={`https://instagram.com/${otherUserInDM.instagramUsername}`} 
