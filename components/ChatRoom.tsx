@@ -44,6 +44,7 @@ const renderUserBadge = (user: User, size: 'small' | 'large' = 'small') => {
         blue: 'text-blue-400',
         red: 'text-red-400',
         gold: 'text-amber-400',
+        pink: 'text-pink-400',
     };
     
     const badgeColor = user.isAdmin 

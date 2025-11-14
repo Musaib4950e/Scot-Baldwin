@@ -35,6 +35,7 @@ const renderUserBadge = (user: User) => {
         blue: 'text-blue-400',
         red: 'text-red-400',
         gold: 'text-amber-400',
+        pink: 'text-pink-400',
     };
     
     const badgeColor = user.isAdmin 
@@ -726,10 +727,10 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                            <div className="space-y-4">
                                <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-2">Badge Type</label>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                                        {(['none', 'blue', 'red', 'gold'] as const).map(type => (
+                                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
+                                        {(['none', 'blue', 'red', 'gold', 'pink'] as const).map(type => (
                                             <button key={type} onClick={() => setBadgeType(type)} className={`p-2 rounded-lg border-2 transition-colors ${badgeType === type ? 'border-cyan-400 bg-cyan-500/20' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
-                                                {type === 'none' ? 'None' : <CheckBadgeIcon className={`w-5 h-5 mx-auto ${type === 'blue' ? 'text-blue-400' : type === 'red' ? 'text-red-400' : 'text-amber-400'}`} />}
+                                                {type === 'none' ? 'None' : <CheckBadgeIcon className={`w-5 h-5 mx-auto ${type === 'blue' ? 'text-blue-400' : type === 'red' ? 'text-red-400' : type === 'gold' ? 'text-amber-400' : 'text-pink-400'}`} />}
                                                 <span className="capitalize mt-1 block">{type}</span>
                                             </button>
                                         ))}
