@@ -723,6 +723,11 @@ class Database {
         if (!user) return { success: false, message: 'User not found.' };
         if (user.walletBalance < cost) return { success: false, message: 'Insufficient funds.' };
 
+        // Prevent re-buying the same permanent badge
+        if (user.verification?.status === 'approved' && !user.verification.expiresAt && user.verification.badgeType === verification.badgeType) {
+            return { success: false, message: 'You already own this permanent badge.' };
+        }
+
         user.walletBalance -= cost;
         user.verification = verification;
         userStore.put(user);

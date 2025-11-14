@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db } from './db';
 
@@ -48,18 +48,21 @@ const renderUserBadge = (user: User, size: 'small' | 'large' = 'small') => {
         red: 'text-red-400',
         gold: 'text-amber-400',
         pink: 'text-pink-400',
+        grey: 'text-slate-400',
+        pastel_blue: 'text-sky-300',
     };
     
-    const badgeColor = user.isAdmin 
-        ? 'text-red-400' 
-        : colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
+    const badgeColor = colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
 
     const sizeClass = size === 'large' ? 'w-5 h-5' : 'w-4 h-4';
 
     return <CheckBadgeIcon className={`${sizeClass} ${badgeColor} flex-shrink-0`} />;
 };
 
-const formatCurrency = (amount: number) => {
+const formatCurrency = (amount: number | null | undefined) => {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(0);
+    }
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 };
 
@@ -136,10 +139,11 @@ const ProfileModal: React.FC<{
 
 
     // Badge Prices
-    const badgePrices = {
-        blue: { 7: 5, 30: 15, permanent: 50 },
-        red: { 7: 10, 30: 25, permanent: 75 },
-        pink: { 7: 15, 30: 40, permanent: 90 },
+    const badgePrices: Record<string, Record<string, number>> = {
+        blue: { '7': 5, '30': 15, permanent: 50 },
+        red: { '7': 10, '30': 25, permanent: 75 },
+        pink: { '7': 15, '30': 40, permanent: 90 },
+        grey: { '7': 1, '30': 3, permanent: 10 },
         gold: { permanent: 100 },
     };
 
@@ -181,19 +185,38 @@ const ProfileModal: React.FC<{
         setIsSubmitting(false);
     };
 
-    const handlePurchase = async (badge: VerificationBadgeType, duration: keyof typeof badgePrices[VerificationBadgeType], cost: number) => {
+    const handlePurchase = async (badge: VerificationBadgeType, duration: string, cost: number) => {
         if (currentUser.walletBalance < cost) {
             alert("Insufficient funds.");
             return;
         }
         if (window.confirm(`Are you sure you want to purchase the ${badge} badge for ${formatCurrency(cost)}?`)) {
             setIsSubmitting(true);
-            const durationDays = duration === 'permanent' ? 'permanent' : duration;
+            const durationDays = duration === 'permanent' ? 'permanent' : parseInt(duration, 10);
             await onPurchaseVerification(badge, durationDays, cost);
             setIsSubmitting(false);
         }
     }
     
+    // Discount Calculation
+    const discountInfo = useMemo(() => {
+        const currentVerification = currentUser.verification;
+        if (currentVerification?.status === 'approved' && currentVerification.expiresAt && currentVerification.expiresAt > Date.now()) {
+            const remainingMs = currentVerification.expiresAt - Date.now();
+            const remainingDays = Math.ceil(remainingMs / (1000 * 60 * 60 * 24));
+            if (remainingDays > 0) {
+                return {
+                    applicable: true,
+                    percentage: Math.min(remainingDays, 7) * 10,
+                    daysLeft: remainingDays,
+                    badgeType: currentVerification.badgeType
+                };
+            }
+        }
+        return { applicable: false, percentage: 0, daysLeft: 0, badgeType: undefined };
+    }, [currentUser.verification]);
+
+
     return (
         <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
              <div className="flex justify-between items-center mb-4">
@@ -272,16 +295,13 @@ const ProfileModal: React.FC<{
                     <h3 className="font-semibold text-lg mb-2 text-white">Transaction History</h3>
                     <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-2 -mr-2">
                         {userTransactions.length > 0 ? userTransactions.map(t => {
-                            const isOutgoing = t.fromUserId === currentUser.id;
-                            const otherUserId = isOutgoing ? t.toUserId : t.fromUserId;
-                            const otherUser = users.find(u => u.id === otherUserId);
                             return (
                                 <div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center">
                                     <div>
                                         <p className="font-semibold">{t.description}</p>
                                         <p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p>
                                     </div>
-                                    <p className={`font-bold ${isOutgoing ? 'text-red-400' : 'text-green-400'}`}>{isOutgoing ? '-' : '+'}{formatCurrency(t.amount)}</p>
+                                    <p className={`font-bold ${t.fromUserId === currentUser.id ? 'text-red-400' : 'text-green-400'}`}>{t.fromUserId === currentUser.id ? '-' : '+'}{formatCurrency(t.amount)}</p>
                                 </div>
                             )
                         }) : <p className="text-sm text-center text-slate-500 p-4">No transactions yet.</p>}
@@ -291,27 +311,49 @@ const ProfileModal: React.FC<{
             )}
             {view === 'market' && (
                 <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar pr-2 -mr-2">
-                    {Object.entries(badgePrices).map(([badge, prices]) => (
+                    {discountInfo.applicable && (
+                        <div className="p-3 bg-cyan-500/10 border border-cyan-500/20 rounded-lg text-center text-sm text-cyan-200">
+                            <p><InformationCircleIcon className="w-5 h-5 inline-block mr-1" />You have <strong className="font-bold">{discountInfo.daysLeft} {discountInfo.daysLeft > 1 ? 'days' : 'day'}</strong> left on your {discountInfo.badgeType} badge. Get a <strong className="font-bold">{discountInfo.percentage}% discount</strong> on any NEW badge!</p>
+                        </div>
+                    )}
+                    {Object.entries(badgePrices).map(([badgeStr, prices]) => {
+                        const badge = badgeStr as VerificationBadgeType;
+                        const colorClasses = { blue: 'text-blue-400', red: 'text-red-400', gold: 'text-amber-400', pink: 'text-pink-400', grey: 'text-slate-400', pastel_blue: 'text-sky-300' };
+                        return (
                         <div key={badge} className="bg-black/20 p-4 rounded-xl border border-white/10">
                             <div className="flex items-center gap-2 mb-3">
-                                <CheckBadgeIcon className={`w-6 h-6 ${badge === 'blue' ? 'text-blue-400' : badge === 'red' ? 'text-red-400' : badge === 'gold' ? 'text-amber-400' : 'text-pink-400'}`} />
-                                <h3 className="font-bold text-xl capitalize text-white">{badge} Badge</h3>
+                                <CheckBadgeIcon className={`w-6 h-6 ${colorClasses[badge]}`} />
+                                <h3 className={`font-bold text-xl capitalize text-white`}>{badge} Badge</h3>
                             </div>
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-center text-sm">
-                                {Object.entries(prices).map(([duration, cost]) => (
-                                    <button 
-                                        key={duration}
-                                        onClick={() => handlePurchase(badge as VerificationBadgeType, duration as any, cost)}
-                                        disabled={isSubmitting || currentUser.walletBalance < cost}
-                                        className="p-2 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        <p className="font-semibold capitalize">{duration === 'permanent' ? 'Permanent' : `${duration} Days`}</p>
-                                        <p className="font-bold text-cyan-300">{formatCurrency(cost)}</p>
-                                    </button>
-                                ))}
+                                {Object.entries(prices).map(([duration, originalCost]) => {
+                                    const hasPermanent = currentUser.verification?.status === 'approved' && !currentUser.verification.expiresAt && currentUser.verification.badgeType === badge;
+                                    
+                                    if (duration === 'permanent' && hasPermanent) {
+                                        return <div key={duration} className="p-2 bg-white/5 rounded-lg border border-white/10 opacity-60"><p className="font-semibold">Permanent</p><p className="font-bold text-green-400">Owned</p></div>
+                                    }
+
+                                    const isUpgrade = discountInfo.applicable && discountInfo.badgeType !== badge;
+                                    const finalCost = isUpgrade ? originalCost * (1 - discountInfo.percentage / 100) : originalCost;
+                                    
+                                    return (
+                                        <button 
+                                            key={duration}
+                                            onClick={() => handlePurchase(badge, duration, finalCost)}
+                                            disabled={isSubmitting || currentUser.walletBalance < finalCost}
+                                            className="p-2 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex flex-col justify-between"
+                                        >
+                                            <p className="font-semibold capitalize">{duration === 'permanent' ? 'Permanent' : `${duration} Days`}</p>
+                                            <div>
+                                                {isUpgrade && <p className="text-xs text-slate-400 line-through">{formatCurrency(originalCost)}</p>}
+                                                <p className="font-bold text-cyan-300">{formatCurrency(finalCost)}</p>
+                                            </div>
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
-                    ))}
+                    )})}
                 </div>
             )}
         </Modal>

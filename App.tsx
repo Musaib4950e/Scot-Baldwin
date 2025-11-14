@@ -228,7 +228,23 @@ const App: React.FC = () => {
 
   const handlePurchaseVerification = async (badgeType: VerificationBadgeType, durationDays: number | 'permanent', cost: number) => {
     if (!currentUser) return { success: false, message: "Not logged in" };
-    const expiresAt = durationDays === 'permanent' ? undefined : Date.now() + durationDays * 24 * 60 * 60 * 1000;
+    
+    const currentVerification = currentUser.verification;
+    let expiresAt: number | undefined;
+
+    if (durationDays === 'permanent') {
+        expiresAt = undefined;
+    } else {
+        // Stacking logic: if it's the same temporary badge, add time to the existing expiry.
+        const isStacking = currentVerification?.status === 'approved' &&
+                           currentVerification.badgeType === badgeType &&
+                           currentVerification.expiresAt &&
+                           currentVerification.expiresAt > Date.now();
+        
+        const baseTimestamp = isStacking ? currentVerification.expiresAt : Date.now();
+        expiresAt = baseTimestamp + durationDays * 24 * 60 * 60 * 1000;
+    }
+
     const verification: Verification = {
         status: 'approved',
         badgeType,

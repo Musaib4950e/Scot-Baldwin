@@ -46,11 +46,11 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
         red: 'text-red-400',
         gold: 'text-amber-400',
         pink: 'text-pink-400',
+        grey: 'text-slate-400',
+        pastel_blue: 'text-sky-300',
     };
     
-    const badgeColor = user.isAdmin 
-        ? 'text-red-400' 
-        : colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
+    const badgeColor = colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
 
     return <CheckBadgeIcon className={`w-3.5 h-3.5 ${badgeColor}`} />;
   };

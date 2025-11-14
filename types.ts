@@ -1,4 +1,4 @@
-export type VerificationBadgeType = 'blue' | 'red' | 'gold' | 'pink';
+export type VerificationBadgeType = 'blue' | 'red' | 'gold' | 'pink' | 'grey' | 'pastel_blue';
 
 export interface Verification {
   status: 'none' | 'pending' | 'approved';
