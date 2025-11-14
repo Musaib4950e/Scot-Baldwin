@@ -1,9 +1,9 @@
 
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { User, Chat, ChatType, Message, Connection, ConnectionStatus } from '../types';
+import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType } from '../types';
 import { db } from './db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 
@@ -24,8 +24,26 @@ interface AdminPanelProps {
     onDeleteConnection: (connectionId: string) => Promise<void>;
     onBroadcastAnnouncement: (text: string) => Promise<void>;
     onAdminForceConnectionStatus: (fromUserId: string, toUserId: string, status: ConnectionStatus) => Promise<void>;
-    onAdminUpdateVerification: (userId: string, status: 'approved' | 'none') => Promise<void>;
+    onAdminUpdateVerification: (userId: string, verification: Partial<Verification>) => Promise<void>;
 }
+
+const renderUserBadge = (user: User) => {
+    if (user?.verification?.status !== 'approved') return null;
+    if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null; // Expired
+
+    const colorClasses = {
+        blue: 'text-blue-400',
+        red: 'text-red-400',
+        gold: 'text-amber-400',
+    };
+    
+    const badgeColor = user.isAdmin 
+        ? 'text-red-400' 
+        : colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
+
+    return <CheckBadgeIcon className={`w-5 h-5 ${badgeColor} flex-shrink-0`} />;
+};
+
 
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const { currentUser, users, chats, messages, connections, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification } = props;
@@ -39,6 +57,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [isEditGroupModalOpen, setIsEditGroupModalOpen] = useState(false);
+    const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     // User form state
@@ -55,13 +74,18 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [groupName, setGroupName] = useState('');
     const [groupPassword, setGroupPassword] = useState('');
     const [groupMembers, setGroupMembers] = useState<string[]>([]);
+
+    // Verification modal state
+    const [badgeType, setBadgeType] = useState<VerificationBadgeType | 'none'>('none');
+    const [expiryType, setExpiryType] = useState<'permanent' | 'hours' | 'days'>('permanent');
+    const [expiryValue, setExpiryValue] = useState<string>('');
     
     // Broadcast state
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [isBroadcasting, setIsBroadcasting] = useState(false);
 
     const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
-    const verificationRequests = useMemo(() => users.filter(u => u.verificationStatus === 'pending'), [users]);
+    const verificationRequests = useMemo(() => users.filter(u => u.verification?.status === 'pending'), [users]);
     
     const viewingGroupMessages = useMemo(() => {
         if (!viewingGroupChat) return [];
@@ -143,6 +167,26 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         setNewPassword('');
         setIsPasswordModalOpen(true);
     };
+
+    const openVerificationModal = (user: User) => {
+        setSelectedUser(user);
+        const verification = user.verification;
+        setBadgeType(verification?.badgeType || 'none');
+        if (verification?.expiresAt) {
+            const diffHours = (verification.expiresAt - Date.now()) / (1000 * 60 * 60);
+            if (diffHours > 24) {
+                setExpiryType('days');
+                setExpiryValue(Math.ceil(diffHours / 24).toString());
+            } else {
+                setExpiryType('hours');
+                setExpiryValue(Math.ceil(diffHours).toString());
+            }
+        } else {
+            setExpiryType('permanent');
+            setExpiryValue('');
+        }
+        setIsVerificationModalOpen(true);
+    }
     
     const handleProfileUpdate = async () => {
         if (!selectedUser) return;
@@ -223,11 +267,42 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
         );
     };
+    
+    const handleVerificationUpdate = async () => {
+        if (!selectedUser) return;
+        setIsSubmitting(true);
+        let expiresAt: number | undefined = undefined;
+        const numValue = parseInt(expiryValue, 10);
+        if (expiryType !== 'permanent' && !isNaN(numValue) && numValue > 0) {
+            const multiplier = expiryType === 'hours' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+            expiresAt = Date.now() + numValue * multiplier;
+        }
+
+        await onAdminUpdateVerification(selectedUser.id, {
+            status: badgeType === 'none' ? 'none' : 'approved',
+            badgeType: badgeType === 'none' ? undefined : badgeType,
+            expiresAt: expiresAt,
+        });
+
+        setIsSubmitting(false);
+        closeAllModals();
+    };
+
+    const handleVerificationRevoke = async () => {
+        if (!selectedUser) return;
+        if (!window.confirm(`Are you sure you want to revoke the badge from ${selectedUser.username}?`)) return;
+        setIsSubmitting(true);
+        await onAdminUpdateVerification(selectedUser.id, { status: 'none' });
+        setIsSubmitting(false);
+        closeAllModals();
+    };
+
 
     const closeAllModals = () => {
         setIsEditUserModalOpen(false);
         setIsPasswordModalOpen(false);
         setIsEditGroupModalOpen(false);
+        setIsVerificationModalOpen(false);
         setSelectedUser(null);
         setSelectedGroup(null);
     };
@@ -270,7 +345,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <div className="overflow-hidden">
                             <div className="flex items-center gap-1.5">
                                 <h2 className="font-bold text-lg truncate">{currentUser.username}</h2>
-                                {currentUser.isVerified && <CheckBadgeIcon className="w-5 h-5 text-red-400 flex-shrink-0" />}
+                                {renderUserBadge(currentUser)}
                             </div>
                             <p className="text-sm text-blue-300 flex items-center gap-1.5"><ShieldCheckIcon className="w-4 h-4" /> Administrator</p>
                         </div>
@@ -390,7 +465,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             <div className="overflow-hidden">
                                                 <div className="flex items-center gap-1.5">
                                                     <p className="font-bold text-lg truncate">{user.username}</p>
-                                                    {user.isVerified && <CheckBadgeIcon className={`w-5 h-5 ${user.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
+                                                    {renderUserBadge(user)}
                                                 </div>
                                                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${user.online ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}>
                                                     <span className={`h-1.5 w-1.5 rounded-full ${user.online ? 'bg-green-500' : 'bg-slate-500'}`}></span>
@@ -402,8 +477,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             <p><strong className="text-slate-400">Email:</strong> {user.email || 'N/A'}</p>
                                             <p><strong className="text-slate-400">User ID:</strong> <span className="font-mono text-xs">{user.id}</span></p>
                                         </div>
-                                        <div className="mt-4 grid grid-cols-3 gap-2">
+                                        <div className="mt-auto grid grid-cols-2 gap-2">
                                             <button onClick={() => openEditUserModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button>
+                                            <button onClick={() => openVerificationModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><CheckBadgeIcon className="w-4 h-4" /> Verify</button>
                                             <button onClick={() => openPasswordModal(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><KeyIcon className="w-4 h-4" /> Pass</button>
                                             <button onClick={() => handleDeleteUserConfirm(user)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button>
                                         </div>
@@ -472,8 +548,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                                 <td className="p-4 text-slate-400">{user.email || 'N/A'}</td>
                                                 <td className="p-4 text-slate-400 text-sm">{new Date(parseInt(user.id.split('-')[1])).toLocaleDateString()}</td>
                                                 <td className="p-4 text-right space-x-2">
-                                                    <button onClick={() => onAdminUpdateVerification(user.id, 'none')} className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded font-semibold">Reject</button>
-                                                    <button onClick={() => onAdminUpdateVerification(user.id, 'approved')} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Approve</button>
+                                                    <button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Manage</button>
                                                 </td>
                                             </tr>
                                         )) : (
@@ -522,14 +597,14 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             </div>
 
             {/* --- Modals --- */}
-            {(isEditUserModalOpen || isPasswordModalOpen || isEditGroupModalOpen) && (
-                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-2xl p-6 w-full max-w-lg border border-white/10 shadow-2xl flex flex-col">
+            <div className={`fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${isEditUserModalOpen || isPasswordModalOpen || isEditGroupModalOpen || isVerificationModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    <div className={`bg-slate-900/50 backdrop-blur-2xl rounded-2xl p-6 w-full max-w-lg border border-white/10 shadow-2xl flex flex-col transition-all duration-300 ${isEditUserModalOpen || isPasswordModalOpen || isEditGroupModalOpen || isVerificationModalOpen ? 'scale-100' : 'scale-95'}`}>
                         <div className="flex justify-between items-center mb-6">
                             <h2 className="text-2xl font-bold text-white">
                                 {isEditUserModalOpen && `Edit ${selectedUser?.username}`}
-                                {isPasswordModalOpen && `Reset Password`}
+                                {isPasswordModalOpen && `Reset Password for ${selectedUser?.username}`}
                                 {isEditGroupModalOpen && `Edit ${selectedGroup?.name}`}
+                                {isVerificationModalOpen && `Manage Verification for ${selectedUser?.username}`}
                             </h2>
                             <button onClick={closeAllModals} className="p-1 text-slate-400 hover:text-white"><XMarkIcon /></button>
                         </div>
@@ -606,7 +681,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         {isPasswordModalOpen && (
                            <div className="space-y-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">New Password for {selectedUser?.username}</label>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">New Password</label>
                                     <input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 </div>
                                 <div className="mt-6 flex justify-end gap-3">
@@ -646,9 +721,46 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 </div>
                            </div>
                         )}
+
+                        {isVerificationModalOpen && selectedUser && (
+                           <div className="space-y-4">
+                               <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Badge Type</label>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                                        {(['none', 'blue', 'red', 'gold'] as const).map(type => (
+                                            <button key={type} onClick={() => setBadgeType(type)} className={`p-2 rounded-lg border-2 transition-colors ${badgeType === type ? 'border-cyan-400 bg-cyan-500/20' : 'border-white/10 bg-white/5 hover:bg-white/10'}`}>
+                                                {type === 'none' ? 'None' : <CheckBadgeIcon className={`w-5 h-5 mx-auto ${type === 'blue' ? 'text-blue-400' : type === 'red' ? 'text-red-400' : 'text-amber-400'}`} />}
+                                                <span className="capitalize mt-1 block">{type}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                               </div>
+                               <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-2">Badge Duration</label>
+                                    <div className="flex rounded-lg border border-white/10 p-1 bg-white/5">
+                                        {(['permanent', 'hours', 'days'] as const).map(type => (
+                                            <button key={type} onClick={() => setExpiryType(type)} className={`flex-1 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${expiryType === type ? 'bg-cyan-500/20 text-cyan-300' : 'text-slate-400 hover:bg-white/10'}`}>{type}</button>
+                                        ))}
+                                    </div>
+                                    {expiryType !== 'permanent' && (
+                                        <div className="relative mt-2">
+                                            <input type="number" value={expiryValue} onChange={e => setExpiryValue(e.target.value)} placeholder={`Enter duration in ${expiryType}`} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 pl-4 pr-10 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                             <ClockIcon className="w-5 h-5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2"/>
+                                        </div>
+                                    )}
+                               </div>
+                                <div className="mt-6 flex justify-between items-center gap-3">
+                                    <button onClick={handleVerificationRevoke} disabled={isSubmitting} className="px-5 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg transition-colors font-semibold disabled:opacity-50">Revoke Badge</button>
+                                    <div className="flex gap-3">
+                                        <button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
+                                        <button onClick={handleVerificationUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:cursor-not-allowed">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                                    </div>
+                                </div>
+                           </div>
+                        )}
+
                     </div>
                 </div>
-            )}
         </>
     )
 }

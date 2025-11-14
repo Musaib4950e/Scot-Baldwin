@@ -1,6 +1,6 @@
 
 import React, { useState, useReducer, useEffect } from 'react';
-import { User, Chat, Message, Connection, ConnectionStatus } from './types';
+import { User, Chat, Message, Connection, ConnectionStatus, Verification } from './types';
 import GroupLocker from './components/GroupLocker';
 import ChatRoom from './components/ChatRoom';
 import AdminPanel from './components/AdminPanel';
@@ -188,14 +188,15 @@ const App: React.FC = () => {
   
   // --- Verification Handlers ---
   const handleRequestVerification = async (userId: string) => {
-    await db.updateUserVerification(userId, 'pending');
+    await db.requestUserVerification(userId);
     await fetchData();
   };
 
-  const handleAdminUpdateVerification = async (userId: string, status: 'approved' | 'none') => {
-    await db.updateUserVerification(userId, status);
+  const handleAdminUpdateUserVerification = async (userId: string, verification: Partial<Verification>) => {
+    await db.adminUpdateUserVerification(userId, verification);
     await fetchData();
   };
+
 
   // --- Admin Handlers ---
   const handleBroadcastAnnouncement = async (text: string) => {
@@ -242,7 +243,7 @@ const App: React.FC = () => {
             onDeleteConnection={handleDeleteConnection}
             onBroadcastAnnouncement={handleBroadcastAnnouncement}
             onAdminForceConnectionStatus={handleAdminForceConnectionStatus}
-            onAdminUpdateVerification={handleAdminUpdateVerification}
+            onAdminUpdateVerification={handleAdminUpdateUserVerification}
           />
         ) : (
           <ChatRoom

@@ -37,6 +37,23 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
     return new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  const renderBadge = (user: User) => {
+    if (user?.verification?.status !== 'approved') return null;
+    if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null; // Expired
+
+    const colorClasses = {
+        blue: 'text-blue-400',
+        red: 'text-red-400',
+        gold: 'text-amber-400',
+    };
+    
+    const badgeColor = user.isAdmin 
+        ? 'text-red-400' 
+        : colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
+
+    return <CheckBadgeIcon className={`w-3.5 h-3.5 ${badgeColor}`} />;
+  };
+
   if (message.type === 'announcement') {
     return (
         <div className="my-4 mx-auto max-w-3xl bg-gradient-to-tr from-purple-500/10 to-cyan-500/10 backdrop-blur-md border border-cyan-400/20 rounded-2xl p-4 text-center">
@@ -61,7 +78,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
          {isGroupChat && !isCurrentUser && (
             <div className="flex items-center gap-1.5 mb-1 ml-3">
               <p className="text-xs text-cyan-300 font-semibold">{author.username}</p>
-              {author.isVerified && <CheckBadgeIcon className={`w-3.5 h-3.5 ${author.isAdmin ? 'text-red-400' : 'text-blue-400'}`} />}
+              {renderBadge(author)}
             </div>
          )}
         <div

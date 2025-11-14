@@ -36,6 +36,25 @@ const getChatDisplayName = (chat: Chat, currentUser: User, users: User[]): strin
   return otherUser?.username || 'Unknown User';
 };
 
+const renderUserBadge = (user: User, size: 'small' | 'large' = 'small') => {
+    if (user?.verification?.status !== 'approved') return null;
+    if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null; // Expired
+
+    const colorClasses = {
+        blue: 'text-blue-400',
+        red: 'text-red-400',
+        gold: 'text-amber-400',
+    };
+    
+    const badgeColor = user.isAdmin 
+        ? 'text-red-400' 
+        : colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
+
+    const sizeClass = size === 'large' ? 'w-5 h-5' : 'w-4 h-4';
+
+    return <CheckBadgeIcon className={`${sizeClass} ${badgeColor} flex-shrink-0`} />;
+};
+
 const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.ReactNode; maxWidth?: string; }> = ({ isOpen, onClose, children, maxWidth = 'max-w-sm' }) => {
     const [isVisible, setIsVisible] = useState(isOpen);
 
@@ -97,11 +116,23 @@ const ProfileSettingsModal: React.FC<{
     };
     
     const renderVerificationStatus = () => {
-        switch (currentUser.verificationStatus) {
+        const verification = currentUser.verification;
+        const isExpired = verification?.expiresAt && verification.expiresAt < Date.now();
+
+        switch (verification?.status) {
             case 'approved':
-                return <p className="text-sm text-center text-blue-300 flex items-center justify-center gap-2 bg-blue-500/10 p-3 rounded-lg">
-                    <CheckBadgeIcon className="w-5 h-5"/> You are verified.
-                </p>;
+                if (isExpired) {
+                    return <p className="text-sm text-center text-slate-400 bg-slate-500/10 p-3 rounded-lg">Your verification has expired.</p>;
+                }
+                const badgeText = `You are verified with a ${verification.badgeType || 'blue'} badge.`;
+                const expiryText = verification.expiresAt ? `Expires on ${new Date(verification.expiresAt).toLocaleDateString()}` : "This badge is permanent.";
+                return <div className="text-sm text-center text-blue-300 flex flex-col items-center justify-center gap-2 bg-blue-500/10 p-3 rounded-lg">
+                    <div className="flex items-center gap-2">
+                        {renderUserBadge(currentUser)}
+                        <span>{badgeText}</span>
+                    </div>
+                    <span className="text-xs text-slate-400">{expiryText}</span>
+                </div>;
             case 'pending':
                 return <p className="text-sm text-center text-amber-300 bg-amber-500/10 p-3 rounded-lg">Your verification request is pending.</p>;
             default:
@@ -515,7 +546,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
               <div className="flex-grow overflow-hidden">
                   <div className="flex items-center gap-1.5">
                     <span className="font-semibold text-lg truncate block">{currentUser.username}</span>
-                    {currentUser.isVerified && <CheckBadgeIcon className={`w-5 h-5 ${currentUser.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
+                    {renderUserBadge(currentUser, 'large')}
                   </div>
                   {currentUser.bio && <span className="text-xs text-slate-400 truncate block">{currentUser.bio}</span>}
               </div>
@@ -528,7 +559,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-base font-bold flex-shrink-0">{user.avatar}</div>
                              <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
                                 <span className="font-semibold truncate">{user.username}</span>
-                                {user.isVerified && <CheckBadgeIcon className={`w-4 h-4 ${user.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
+                                {renderUserBadge(user)}
                             </div>
                             {user.id === currentUser.id && <CheckCircleIcon className="w-6 h-6 text-cyan-400 flex-shrink-0" />}
                         </button>
@@ -606,7 +637,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                             </div>
                             <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
                                 <span className="font-semibold truncate">{user.username}</span>
-                                {user.isVerified && <CheckBadgeIcon className={`w-4 h-4 ${user.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
+                                {renderUserBadge(user)}
                             </div>
                              {renderSearchUserActions(user)}
                         </div>
@@ -641,7 +672,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                   <div className="flex-grow overflow-hidden">
                     <div className="flex items-center gap-2">
                         <h3 className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</h3>
-                        {otherUser?.isVerified && <CheckBadgeIcon className={`w-4 h-4 ${otherUser.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
+                        {otherUser && renderUserBadge(otherUser)}
                         {chat.password && <LockClosedIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />}
                     </div>
                     <p className="text-sm text-slate-400 truncate">{lastMessage?.text || 'No messages yet'}</p>
@@ -678,7 +709,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 <div className='flex-grow overflow-hidden'>
                     <div className="flex items-center gap-2">
                         <h2 className="text-xl font-bold truncate">{getChatDisplayName(activeChat, currentUser, users)}</h2>
-                        {otherUserInDM?.isVerified && <CheckBadgeIcon className={`w-5 h-5 ${otherUserInDM.isAdmin ? 'text-red-400' : 'text-blue-400'} flex-shrink-0`} />}
+                        {otherUserInDM && renderUserBadge(otherUserInDM, 'large')}
                         {otherUserInDM?.instagramUsername && (
                             <a 
                                 href={`https://instagram.com/${otherUserInDM.instagramUsername}`} 

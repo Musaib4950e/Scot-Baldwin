@@ -1,4 +1,4 @@
-import { User, Chat, Message, ChatType, Connection, ConnectionStatus } from '../types';
+import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification } from '../types';
 
 const DB_NAME = 'bakko-db';
 const DB_VERSION = 2; // Incremented version for schema change
@@ -97,8 +97,10 @@ class Database {
             password: '197700', // The special password
             online: false,
             isAdmin: true,
-            isVerified: true,
-            verificationStatus: 'approved',
+            verification: {
+                status: 'approved',
+                badgeType: 'gold',
+            },
             bio: 'The administrator of BAK-Ko.'
         };
 
@@ -225,8 +227,7 @@ class Database {
           instagramUsername: instagramUsername?.trim() || undefined,
           online: false,
           isAdmin: false,
-          isVerified: false,
-          verificationStatus: 'none',
+          verification: { status: 'none' },
         };
         
         const userTx = db.transaction(USERS_STORE, 'readwrite');
@@ -250,15 +251,50 @@ class Database {
         return newUser;
     }
     
-    updateUserVerification = async (userId: string, status: 'pending' | 'approved' | 'none'): Promise<void> => {
+    requestUserVerification = async (userId: string): Promise<void> => {
         const db = await this.dbPromise;
         const tx = db.transaction(USERS_STORE, 'readwrite');
         const store = tx.objectStore(USERS_STORE);
         const user = await promisifyRequest(store.get(userId));
 
         if (user) {
-            user.verificationStatus = status;
-            user.isVerified = status === 'approved';
+            if (!user.verification) {
+                user.verification = { status: 'none' };
+            }
+            if (user.verification.status === 'none') {
+                user.verification.status = 'pending';
+                store.put(user);
+            }
+        }
+        
+        await new Promise<void>(r => tx.oncomplete = () => r());
+        this.notifyDataChanged();
+    };
+
+    adminUpdateUserVerification = async (userId: string, verificationDetails: Partial<Verification>): Promise<void> => {
+        const db = await this.dbPromise;
+        const tx = db.transaction(USERS_STORE, 'readwrite');
+        const store = tx.objectStore(USERS_STORE);
+        const user = await promisifyRequest(store.get(userId));
+
+        if (user) {
+            if (!user.verification) {
+                user.verification = { status: 'none' };
+            }
+            Object.assign(user.verification, verificationDetails);
+
+            if (verificationDetails.status !== 'approved') {
+                delete user.verification.badgeType;
+                delete user.verification.expiresAt;
+            }
+
+            if(verificationDetails.badgeType === undefined) {
+                delete user.verification.badgeType;
+            }
+            if(verificationDetails.expiresAt === undefined) {
+                delete user.verification.expiresAt;
+            }
+            
             store.put(user);
         }
         
