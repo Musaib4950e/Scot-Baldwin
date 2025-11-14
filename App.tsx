@@ -1,4 +1,5 @@
 
+
 import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus } from './types';
 import GroupLocker from './components/GroupLocker';
@@ -196,7 +197,7 @@ const App: React.FC = () => {
 
 
   return (
-    <div className="bg-slate-900 text-white min-h-screen w-full font-sans overflow-hidden">
+    <div className="text-white min-h-screen w-full font-sans overflow-hidden">
       {currentUser ? (
         currentUser.isAdmin ? (
           <AdminPanel
