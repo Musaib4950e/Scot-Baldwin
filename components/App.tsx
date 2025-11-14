@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
 import GroupLocker from './GroupLocker';
@@ -40,28 +41,41 @@ const App: React.FC = () => {
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
-    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
-        db.getUsers(),
-        db.getChats(),
-        db.getMessages(),
-        db.getCurrentUser(),
-        db.getLoggedInUsers(),
-        db.getConnections(),
-        db.getTransactions(),
-        db.getReports(),
-    ]);
-    setUsers(usersData);
-    setChats(chatsData);
-    setMessages(messagesData);
-    setCurrentUser(currentUserData);
-    setLoggedInUsers(loggedInUsersData);
-    setConnections(connectionsData);
-    setTransactions(transactionsData);
-    setReports(reportsData);
+    try {
+        const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
+            db.getUsers(),
+            db.getChats(),
+            db.getMessages(),
+            db.getCurrentUser(),
+            db.getLoggedInUsers(),
+            db.getConnections(),
+            db.getTransactions(),
+            db.getReports(),
+        ]);
+        setUsers(usersData);
+        setChats(chatsData);
+        setMessages(messagesData);
+        setCurrentUser(currentUserData);
+        setLoggedInUsers(loggedInUsersData);
+        setConnections(connectionsData);
+        setTransactions(transactionsData);
+        setReports(reportsData);
+    } catch (error) {
+        console.error("Failed to fetch data:", error);
+        // If there's an auth error (e.g., token expired), we might want to log the user out.
+        // For now, we'll just log the error.
+    }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchData(); // Fetch initial data
+
+    // Set up polling to simulate real-time updates from the database
+    const pollInterval = setInterval(() => {
+        fetchData();
+    }, 2500); // Poll every 2.5 seconds for updates
+
+    return () => clearInterval(pollInterval); // Cleanup on unmount
   }, []);
 
 
