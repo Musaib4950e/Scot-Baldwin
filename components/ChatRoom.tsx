@@ -1,9 +1,10 @@
 
 
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon, ChatBubbleLeftRightIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db } from './db';
 
@@ -481,6 +482,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   const accountSwitcherRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
+  const [sidebarView, setSidebarView] = useState<'chats' | 'wallet'>('chats');
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
@@ -493,6 +495,12 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
+  // Wallet Panel state
+  const [transferUser, setTransferUser] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferMessage, setTransferMessage] = useState({ type: '', text: '' });
+  const [isSubmittingTransfer, setIsSubmittingTransfer] = useState(false);
+
   const incomingRequests = useMemo(() => connections.filter(c => c.toUserId === currentUser.id && c.status === ConnectionStatus.PENDING), [connections, currentUser.id]);
   const activeChat = useMemo(() => chats.find(c => c.id === activeChatId), [activeChatId, chats]);
   const activeChatMessages = useMemo(() => messages.filter(m => m.chatId === activeChatId).sort((a,b) => a.timestamp - b.timestamp), [activeChatId, messages]);
@@ -503,6 +511,22 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     }
     return null;
   }, [activeChat, currentUser.id, users]);
+
+  const userTransactions = useMemo(() => {
+        return transactions
+            .filter(t => t.fromUserId === currentUser.id || t.toUserId === currentUser.id)
+            .sort((a, b) => b.timestamp - a.timestamp);
+    }, [transactions, currentUser.id]);
+
+  const connectedUsers = useMemo(() => {
+    const acceptedUserIds = new Set(
+        connections
+            .filter(c => c.status === ConnectionStatus.ACCEPTED && (c.fromUserId === currentUser.id || c.toUserId === currentUser.id))
+            .flatMap(c => [c.fromUserId, c.toUserId])
+    );
+    return users.filter(u => u.id !== currentUser.id && acceptedUserIds.has(u.id));
+  }, [connections, users, currentUser.id]);
+
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [activeChatMessages, isOtherUserTyping]);
   useEffect(() => { setIsOtherUserTyping(false); }, [activeChatId]);
@@ -614,6 +638,31 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
           }
       }
   }
+
+  const handlePanelTransfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(transferAmount);
+    if (!transferUser || !amount || amount <= 0) {
+        setTransferMessage({type: 'error', text: 'Select a user and enter a valid amount.'});
+        return;
+    }
+    if (currentUser.walletBalance < amount) {
+        setTransferMessage({type: 'error', text: 'Insufficient funds.'});
+        return;
+    }
+    setIsSubmittingTransfer(true);
+    setTransferMessage({type: '', text: ''});
+    const result = await onTransferFunds(transferUser, amount);
+    if (result.success) {
+        setTransferMessage({type: 'success', text: result.message});
+        setTransferUser('');
+        setTransferAmount('');
+        setTimeout(() => setTransferMessage({type: '', text: ''}), 3000);
+    } else {
+        setTransferMessage({type: 'error', text: result.message});
+    }
+    setIsSubmittingTransfer(false);
+};
 
   const filteredUsers = useMemo(() => {
     if (!searchQuery) return [];
@@ -751,15 +800,67 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
           </div>
         </header>
         
-        <div className="p-4 flex-shrink-0 relative">
-          <MagnifyingGlassIcon className="w-5 h-5 text-slate-400 absolute left-8 top-1/2 -translate-y-1/2"/>
-          <input type="text" placeholder="Search or start new chat" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-full py-2.5 pl-11 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors" />
-          {searchQuery && (<div className="absolute top-full left-0 right-0 mt-2 p-2 bg-slate-900/50 backdrop-blur-xl rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto custom-scrollbar">{filteredUsers.length > 0 ? (filteredUsers.map(user => (<div key={user.id} className="flex items-center gap-3 p-2 rounded-lg"><div className="relative flex-shrink-0"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{user.avatar}</div><span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-900/50 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span></div><div className="flex-grow flex items-center gap-1.5 overflow-hidden"><span className="font-semibold truncate">{user.username}</span>{renderUserBadge(user)}</div>{renderSearchUserActions(user)}</div>))) : <div className="p-2 text-center text-slate-400">No users found.</div>}</div>)}
-        </div>
+        {sidebarView === 'chats' && (
+        <>
+            <div className="p-4 flex-shrink-0 relative">
+              <MagnifyingGlassIcon className="w-5 h-5 text-slate-400 absolute left-8 top-1/2 -translate-y-1/2"/>
+              <input type="text" placeholder="Search or start new chat" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-full py-2.5 pl-11 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors" />
+              {searchQuery && (<div className="absolute top-full left-0 right-0 mt-2 p-2 bg-slate-900/50 backdrop-blur-xl rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto custom-scrollbar">{filteredUsers.length > 0 ? (filteredUsers.map(user => (<div key={user.id} className="flex items-center gap-3 p-2 rounded-lg"><div className="relative flex-shrink-0"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{user.avatar}</div><span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-900/50 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span></div><div className="flex-grow flex items-center gap-1.5 overflow-hidden"><span className="font-semibold truncate">{user.username}</span>{renderUserBadge(user)}</div>{renderSearchUserActions(user)}</div>))) : <div className="p-2 text-center text-slate-400">No users found.</div>}</div>)}
+            </div>
+            <div className="flex-grow overflow-y-auto custom-scrollbar">
+              {sortedChats.length > 0 ? ( sortedChats.map(chat => { const lastMessage = messages.filter(m => m.chatId === chat.id).sort((a,b) => b.timestamp - a.timestamp)[0]; const otherUser = chat.type === ChatType.DM ? users.find(u => u.id === chat.members.find(id => id !== currentUser.id)) : null; return (<div key={chat.id} onClick={() => handleSelectChat(chat.id)} className={`flex items-center gap-4 p-4 mx-2 rounded-xl cursor-pointer transition-colors duration-200 relative ${activeChatId === chat.id ? 'bg-white/10' : 'hover:bg-white/5'}`}>{activeChatId === chat.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 bg-cyan-400 rounded-r-full"></div>}<div className="relative flex-shrink-0"><div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold">{chat.id === 'chat-announcements-global' ? '📢' : (chat.type === ChatType.GROUP ? <UsersIcon className="w-7 h-7" /> : (otherUser ? otherUser.avatar : <UserCircleIcon className="w-7 h-7"/>)) }</div>{otherUser && (<span className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full ring-2 ring-black/30 ${otherUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>)}</div><div className="flex-grow overflow-hidden"><div className="flex items-center gap-2"><h3 className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</h3>{otherUser && renderUserBadge(otherUser)}{chat.password && <LockClosedIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />}</div><p className="text-sm text-slate-400 truncate">{lastMessage?.text || 'No messages yet'}</p></div></div>);})) : (<div className="p-6 text-center text-slate-400"><p>No chats yet.</p><p className="text-sm">Connect with users to start a conversation.</p></div>)}
+            </div>
+        </>
+        )}
 
-        <div className="flex-grow overflow-y-auto custom-scrollbar">
-          {sortedChats.length > 0 ? ( sortedChats.map(chat => { const lastMessage = messages.filter(m => m.chatId === chat.id).sort((a,b) => b.timestamp - a.timestamp)[0]; const otherUser = chat.type === ChatType.DM ? users.find(u => u.id === chat.members.find(id => id !== currentUser.id)) : null; return (<div key={chat.id} onClick={() => handleSelectChat(chat.id)} className={`flex items-center gap-4 p-4 mx-2 rounded-xl cursor-pointer transition-colors duration-200 relative ${activeChatId === chat.id ? 'bg-white/10' : 'hover:bg-white/5'}`}>{activeChatId === chat.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 bg-cyan-400 rounded-r-full"></div>}<div className="relative flex-shrink-0"><div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold">{chat.id === 'chat-announcements-global' ? '📢' : (chat.type === ChatType.GROUP ? <UsersIcon className="w-7 h-7" /> : (otherUser ? otherUser.avatar : <UserCircleIcon className="w-7 h-7"/>)) }</div>{otherUser && (<span className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full ring-2 ring-black/30 ${otherUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>)}</div><div className="flex-grow overflow-hidden"><div className="flex items-center gap-2"><h3 className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</h3>{otherUser && renderUserBadge(otherUser)}{chat.password && <LockClosedIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />}</div><p className="text-sm text-slate-400 truncate">{lastMessage?.text || 'No messages yet'}</p></div></div>);})) : (<div className="p-6 text-center text-slate-400"><p>No chats yet.</p><p className="text-sm">Connect with users to start a conversation.</p></div>)}
-        </div>
+        {sidebarView === 'wallet' && (
+            <div className="flex-grow overflow-y-auto custom-scrollbar p-4 space-y-4">
+                <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 p-4 rounded-xl text-center">
+                    <p className="text-sm text-slate-300">Current Balance</p>
+                    <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentUser.walletBalance)}</p>
+                </div>
+                <form onSubmit={handlePanelTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
+                    <h3 className="font-semibold text-lg text-white">Send Funds</h3>
+                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                        <option value="">Select a connection...</option>
+                        {connectedUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                    </select>
+                    <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
+                    <button type="submit" disabled={isSubmittingTransfer || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                        {isSubmittingTransfer ? 'Sending...' : 'Send'}
+                    </button>
+                </form>
+                 <div className="mt-2">
+                    <h3 className="font-semibold text-lg mb-2 text-slate-300">Transaction History</h3>
+                    <div className="max-h-64 overflow-y-auto custom-scrollbar space-y-2 pr-2 -mr-2">
+                        {userTransactions.length > 0 ? userTransactions.map(t => (
+                            <div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center">
+                                <div>
+                                    <p className="font-semibold">{t.description}</p>
+                                    <p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p>
+                                </div>
+                                <p className={`font-bold ${t.fromUserId === currentUser.id ? 'text-red-400' : 'text-green-400'}`}>{t.fromUserId === currentUser.id ? '-' : '+'}{formatCurrency(t.amount)}</p>
+                            </div>
+                        )) : <p className="text-sm text-center text-slate-500 p-4">No transactions yet.</p>}
+                    </div>
+                 </div>
+            </div>
+        )}
+
+        <footer className="flex-shrink-0 p-2 border-t border-white/10">
+            <div className="flex justify-around items-center">
+                <button onClick={() => setSidebarView('chats')} className={`flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-colors ${sidebarView === 'chats' ? 'text-cyan-300 bg-cyan-500/10' : 'text-slate-400 hover:bg-white/5'}`}>
+                    <ChatBubbleLeftRightIcon className="w-6 h-6" />
+                    <span className="text-xs font-semibold">Chats</span>
+                </button>
+                <button onClick={() => setSidebarView('wallet')} className={`flex-1 flex flex-col items-center justify-center gap-1 p-2 rounded-lg transition-colors ${sidebarView === 'wallet' ? 'text-cyan-300 bg-cyan-500/10' : 'text-slate-400 hover:bg-white/5'}`}>
+                    <WalletIcon className="w-6 h-6" />
+                    <span className="text-xs font-semibold">Wallet</span>
+                </button>
+            </div>
+        </footer>
+
       </aside>
 
       <main className={`flex-1 flex flex-col bg-black/30 absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out md:static md:flex ${showChatWindow ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0`}>

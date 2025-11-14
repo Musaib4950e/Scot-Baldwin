@@ -194,3 +194,9 @@ export const CurrencyDollarIcon: React.FC<{ className?: string }> = ({ className
       <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h15a3 3 0 013 3v15a3 3 0 01-3 3h-15a3 3 0 01-3-3V4.5zM8.25 9a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM12 15a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-3a.75.75 0 01-.75-.75v-.008a.75.75 0 01.75-.75h.008a.75.75 0 01.75-.75v-.008A.75.75 0 0112 15z" clipRule="evenodd" />
     </svg>
 );
+
+export const ChatBubbleLeftRightIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path fillRule="evenodd" d="M3.47 3.47a.75.75 0 011.06 0L8.25 7.19V6.75a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v7.5a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5h1.5V7.5h-4.5v1.81L9.53 7.72a.75.75 0 010 1.06l-4.72 4.72V15a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75V4.53a.75.75 0 010-1.06zm14.28 2.28a.75.75 0 011.06 0l4.72 4.72v-1.81h1.5a.75.75 0 010 1.5h-2.25a.75.75 0 01-.75-.75v-6a.75.75 0 01-.75-.75h-7.5a.75.75 0 01-.75-.75v-1.5a.75.75 0 011.5 0v.75h6.19l-4.72-4.72a.75.75 0 111.06-1.06l4.72 4.72z" clipRule="evenodd" />
+    </svg>
+);
