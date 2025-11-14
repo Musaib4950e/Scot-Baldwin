@@ -83,6 +83,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [groupPassword, setGroupPassword] = useState('');
     const [groupMembers, setGroupMembers] = useState<string[]>([]);
 
+    const [verificationTab, setVerificationTab] = useState<'manage' | 'requests'>('manage');
     const [badgeType, setBadgeType] = useState<VerificationBadgeType | 'none'>('none');
     const [expiryType, setExpiryType] = useState<'permanent' | 'hours' | 'days'>('permanent');
     const [expiryValue, setExpiryValue] = useState<string>('');
@@ -216,6 +217,22 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     };
 
     const handleVerificationRevoke = async () => { if (!selectedUser) return; if (!window.confirm(`Are you sure you want to revoke the badge from ${selectedUser.username}?`)) return; setIsSubmitting(true); await onAdminUpdateVerification(selectedUser.id, { status: 'none' }); setIsSubmitting(false); closeAllModals(); };
+
+    const getVerificationStatusText = (user: User) => {
+        const verification = user.verification;
+        if (verification?.status === 'approved') {
+            const isExpired = verification.expiresAt && verification.expiresAt < Date.now();
+            if (isExpired) {
+                return "Expired";
+            }
+            const badgeName = verification.badgeType ? verification.badgeType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Blue';
+            return `Verified (${badgeName})`;
+        }
+        if (verification?.status === 'pending') {
+            return 'Pending Review';
+        }
+        return 'Not Verified';
+    };
 
     const closeAllModals = () => { setIsEditUserModalOpen(false); setIsPasswordModalOpen(false); setIsEditGroupModalOpen(false); setIsVerificationModalOpen(false); setIsGrantModalOpen(false); setIsFreezeModalOpen(false); setSelectedUser(null); setSelectedGroup(null); };
 
@@ -362,7 +379,68 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                     )}
                     {view === 'requests' && ( <div><h1 className="text-4xl font-bold mb-8 text-white">Connection Requests</h1><div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl"><table className="w-full text-left"><thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">From</th><th className="p-4">To</th><th className="p-4">Date</th><th className="p-4 text-right">Actions</th></tr></thead><tbody>{pendingRequests.length > 0 ? pendingRequests.map(req => { const fromUser = users.find(u => u.id === req.fromUserId); const toUser = users.find(u => u.id === req.toUserId); return (<tr key={req.id} className="border-b border-white/10 hover:bg-white/5"><td className="p-4 font-semibold">{fromUser?.username || 'Unknown'}</td><td className="p-4 font-semibold">{toUser?.username || 'Unknown'}</td><td className="p-4 text-slate-400 text-sm">{new Date(req.requestedAt).toLocaleDateString()}</td><td className="p-4 text-right space-x-2"><button onClick={() => onUpdateConnection(req.id, ConnectionStatus.REJECTED)} className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded font-semibold">Deny</button><button onClick={() => onUpdateConnection(req.id, ConnectionStatus.ACCEPTED)} className="px-3 py-1.5 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded font-semibold">Approve</button></td></tr>)}) : (<tr><td colSpan={4} className="text-center p-8 text-slate-500">No pending requests.</td></tr>)}</tbody></table></div></div> )}
-                    {view === 'verification' && ( <div><h1 className="text-4xl font-bold mb-8 text-white">Verification Requests</h1><div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl"><table className="w-full text-left"><thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">User</th><th className="p-4">Email</th><th className="p-4">Date Registered</th><th className="p-4 text-right">Actions</th></tr></thead><tbody>{verificationRequests.length > 0 ? verificationRequests.map(user => (<tr key={user.id} className="border-b border-white/10 hover:bg-white/5"><td className="p-4 font-semibold">{user.username}</td><td className="p-4 text-slate-400">{user.email || 'N/A'}</td><td className="p-4 text-slate-400 text-sm">{new Date(parseInt(user.id.split('-')[1])).toLocaleDateString()}</td><td className="p-4 text-right space-x-2"><button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Manage</button></td></tr>)) : (<tr><td colSpan={4} className="text-center p-8 text-slate-500">No pending verification requests.</td></tr>)}</tbody></table></div></div> )}
+                    {view === 'verification' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Verification Management</h1>
+                             <div className="mb-6 border-b border-white/10">
+                                <nav className="flex -mb-px space-x-4">
+                                    <button onClick={() => setVerificationTab('manage')} className={`px-3 py-2 text-base font-semibold border-b-2 ${verificationTab === 'manage' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                                        Manage All
+                                    </button>
+                                    <button onClick={() => setVerificationTab('requests')} className={`relative px-3 py-2 text-base font-semibold border-b-2 ${verificationTab === 'requests' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}>
+                                        Requests
+                                        {verificationRequests.length > 0 && (
+                                            <span className="absolute -top-1 -right-2 h-5 w-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">{verificationRequests.length}</span>
+                                        )}
+                                    </button>
+                                </nav>
+                            </div>
+                            {verificationTab === 'manage' && (
+                                <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
+                                <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="border-b border-white/10 text-sm text-slate-400">
+                                        <tr>
+                                            <th className="p-4">User</th>
+                                            <th className="p-4">Current Status</th>
+                                            <th className="p-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {users.filter(u => !u.isAdmin).map(user => (
+                                            <tr key={user.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0">{user.avatar}</div>
+                                                        <div><span className="font-semibold">{user.username}</span></div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        {renderUserBadge(user)}
+                                                        <span>{getVerificationStatusText(user)}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-right">
+                                                    <button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Manage</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                                </div>
+                                </div>
+                            )}
+                             {verificationTab === 'requests' && (
+                                <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl">
+                                    <table className="w-full text-left">
+                                        <thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">User</th><th className="p-4">Email</th><th className="p-4">Date Registered</th><th className="p-4 text-right">Actions</th></tr></thead>
+                                        <tbody>{verificationRequests.length > 0 ? verificationRequests.map(user => (<tr key={user.id} className="border-b border-white/10 hover:bg-white/5"><td className="p-4 font-semibold">{user.username}</td><td className="p-4 text-slate-400">{user.email || 'N/A'}</td><td className="p-4 text-slate-400 text-sm">{new Date(parseInt(user.id.split('-')[1])).toLocaleDateString()}</td><td className="p-4 text-right space-x-2"><button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Manage</button></td></tr>)) : (<tr><td colSpan={4} className="text-center p-8 text-slate-500">No pending verification requests.</td></tr>)}</tbody>
+                                    </table>
+                                </div>
+                             )}
+                        </div>
+                     )}
                     {view === 'groups' && ( <div><h1 className="text-4xl font-bold mb-8 text-white">Group Management</h1><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{chats.filter(c => c.type === ChatType.GROUP && c.id !== 'chat-announcements-global').map(group => { const creator = users.find(u => u.id === group.creatorId); return (<div key={group.id} className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-5 flex flex-col"><div className="flex items-center gap-4 mb-4"><div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0"><UsersIcon className="w-8 h-8"/></div><div className="overflow-hidden"><p className="font-bold text-lg truncate">{group.name}</p><p className="text-sm text-slate-400"> {group.members.length} Members</p></div></div><div className="space-y-3 text-sm text-slate-300 flex-grow mb-4"><p><strong className="text-slate-400">Created by:</strong> {creator?.username || 'Unknown'}</p><p><strong className="text-slate-400">Password:</strong> {group.password ? 'Protected' : 'None'}</p></div><div className="mt-4 grid grid-cols-3 gap-2"><button onClick={() => setViewingGroupChat(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><EyeIcon className="w-4 h-4" /> View</button><button onClick={() => openEditGroupModal(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button><button onClick={() => handleDeleteGroupConfirm(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button></div></div>); })}</div></div> )}
                     {view === 'transactions' && (
                          <div>
