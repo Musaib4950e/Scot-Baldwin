@@ -5,7 +5,7 @@ import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, Users
 import ChatMessage from './ChatMessage';
 import { db_firebase as db, MARKETPLACE_ITEMS } from './db';
 import { onSnapshot, collection, query, where, doc } from 'firebase/firestore';
-import { fdb } from './firebase'; // Make sure to export 'db' as 'fdb' from firebase.ts
+import { db as fdb } from './firebase';
 
 interface ChatRoomProps {
   currentUser: User;

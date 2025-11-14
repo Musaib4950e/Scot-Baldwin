@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report, TransactionType } from '../types';
 import { db_firebase as db, MARKETPLACE_ITEMS } from './db';
 import { onSnapshot, collection, query, where, doc } from 'firebase/firestore';
-import { fdb } from './firebase'; // Make sure to export 'db' as 'fdb' from firebase.ts
+import { db as fdb } from './firebase';
 import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon, ExclamationTriangleIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
