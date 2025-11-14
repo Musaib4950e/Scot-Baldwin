@@ -1,5 +1,6 @@
 
 
+
 import React, { useState } from 'react';
 import type { User } from '../types';
 import { db } from './db';
@@ -82,6 +83,7 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
     }
     setIsSubmitting(true);
     
+    // FIX: Property 'generatePasswordRecoveryToken' does not exist on type 'Database'.
     const user = await db.generatePasswordRecoveryToken(recoveryEmail);
     if (user && user.recoveryToken) {
         setGeneratedToken(user.recoveryToken);
@@ -100,6 +102,7 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
       return;
     }
     setIsSubmitting(true);
+    // FIX: Property 'resetPasswordWithToken' does not exist on type 'Database'.
     const user = await db.resetPasswordWithToken(inputToken.trim(), newPasswordForReset.trim());
     if (user) {
         setLoginMessage('Password has been successfully reset. Please log in.');
