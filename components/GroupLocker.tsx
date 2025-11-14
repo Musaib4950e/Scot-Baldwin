@@ -238,7 +238,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 gap-8">
+      <h1 className="text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 to-cyan-300">BAK -Ko</h1>
       <div className="w-full max-w-md bg-black/20 backdrop-blur-2xl border border-white/10 rounded-3xl p-8 shadow-2xl shadow-black/30 text-white">
         {renderContent()}
       </div>
