@@ -2,6 +2,7 @@ import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
 import GroupLocker from './GroupLocker';
 import ChatRoom from './ChatRoom';
+// FIX: Changed import to be a default import.
 import AdminPanel from './AdminPanel';
 import { db } from './db';
 

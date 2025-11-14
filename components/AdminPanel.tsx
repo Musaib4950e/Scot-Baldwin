@@ -475,180 +475,194 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     <thead className="border-b border-white/10 text-sm text-slate-400">
                                         <tr>
                                             <th className="p-4">User</th>
-                                            <th className="p-4">Current Status</th>
+                                            <th className="p-4">Status</th>
+                                            <th className="p-4">Expires On</th>
                                             <th className="p-4 text-right">Actions</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {users.filter(u => !u.isAdmin).map(user => (
-                                            <tr key={user.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
-                                                <td className="p-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-xl" />
-                                                        <div><UserName user={user} className="font-semibold" /></div>
-                                                    </div>
-                                                </td>
-                                                <td className="p-4">
-                                                    <div className="flex items-center gap-2">
-                                                        {renderUserBadge(user)}
-                                                        <span>{getVerificationStatusText(user)}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="p-4 text-right">
-                                                    <button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Manage</button>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {users.filter(u => !u.isAdmin).map(user => {
+                                            const verification = user.verification;
+                                            const isExpired = verification?.expiresAt && verification.expiresAt < Date.now();
+                                            return (
+                                                <tr key={user.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
+                                                    <td className="p-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-xl" />
+                                                            <div>
+                                                                <div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold" />{renderUserBadge(user)}</div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <span className={`font-semibold ${verification?.status === 'approved' && !isExpired ? 'text-green-400' : 'text-slate-400'}`}>
+                                                            {getVerificationStatusText(user)}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4 text-slate-400">
+                                                        {verification?.expiresAt && !isExpired ? new Date(verification.expiresAt).toLocaleDateString() : 'N/A'}
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 text-white rounded-lg font-semibold transition-colors">Manage</button>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
                                     </tbody>
                                 </table>
                                 </div>
                                 </div>
                             )}
-                             {verificationTab === 'requests' && (
+                            {verificationTab === 'requests' && (
                                 <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl">
                                     <table className="w-full text-left">
-                                        <thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">User</th><th className="p-4">Email</th><th className="p-4">Date Registered</th><th className="p-4 text-right">Actions</th></tr></thead>
-                                        <tbody>{verificationRequests.length > 0 ? verificationRequests.map(user => (<tr key={user.id} className="border-b border-white/10 hover:bg-white/5"><td className="p-4 font-semibold">{user.username}</td><td className="p-4 text-slate-400">{user.email || 'N/A'}</td><td className="p-4 text-slate-400 text-sm">{new Date(parseInt(user.id.split('-')[1])).toLocaleDateString()}</td><td className="p-4 text-right space-x-2"><button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded font-semibold">Manage</button></td></tr>)) : (<tr><td colSpan={4} className="text-center p-8 text-slate-500">No pending verification requests.</td></tr>)}</tbody>
+                                        <thead className="border-b border-white/10 text-sm text-slate-400">
+                                            <tr><th className="p-4">User</th><th className="p-4">Instagram</th><th className="p-4 text-right">Actions</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {verificationRequests.length > 0 ? verificationRequests.map(user => (
+                                                <tr key={user.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
+                                                    <td className="p-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-xl" />
+                                                            <div><UserName user={user} className="font-semibold" /></div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 text-slate-400">{user.instagramUsername || 'N/A'}</td>
+                                                    <td className="p-4 text-right space-x-2">
+                                                        <button onClick={() => openVerificationModal(user)} className="px-3 py-1.5 text-xs bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 rounded-lg font-semibold">Review</button>
+                                                    </td>
+                                                </tr>
+                                            )) : <tr><td colSpan={3} className="text-center p-8 text-slate-500">No pending verification requests.</td></tr>}
+                                        </tbody>
                                     </table>
                                 </div>
-                             )}
+                            )}
                         </div>
-                     )}
+                    )}
+                     {view === 'groups' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Group Management</h1>
+                            <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl">
+                                <table className="w-full text-left">
+                                    <thead className="border-b border-white/10 text-sm text-slate-400">
+                                        <tr>
+                                            <th className="p-4">Group Name</th>
+                                            <th className="p-4">Members</th>
+                                            <th className="p-4">Creator</th>
+                                            <th className="p-4 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {chats.filter(c => c.type === ChatType.GROUP && c.id !== 'chat-announcements-global').map(chat => {
+                                            const creator = users.find(u => u.id === chat.creatorId);
+                                            return (
+                                                <tr key={chat.id} className="border-b border-white/10 hover:bg-white/5">
+                                                    <td className="p-4 font-semibold">{chat.name}</td>
+                                                    <td className="p-4">{chat.members.length}</td>
+                                                    <td className="p-4">{creator?.username || 'N/A'}</td>
+                                                    <td className="p-4 text-right space-x-2">
+                                                        <button onClick={() => setViewingGroupChat(chat)} className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 rounded-lg font-semibold">View</button>
+                                                        <button onClick={() => openEditGroupModal(chat)} className="px-3 py-1.5 text-xs bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Edit</button>
+                                                        <button onClick={() => handleDeleteGroupConfirm(chat)} className="px-3 py-1.5 text-xs bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg font-semibold">Delete</button>
+                                                    </td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'transactions' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Transaction Log</h1>
+                            <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl">
+                                <div className="overflow-x-auto">
+                                <table className="w-full text-left">
+                                    <thead className="border-b border-white/10 text-sm text-slate-400">
+                                        <tr>
+                                            <th className="p-4">Date</th>
+                                            <th className="p-4">Type</th>
+                                            <th className="p-4">From/To</th>
+                                            <th className="p-4">Description</th>
+                                            <th className="p-4 text-right">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {transactions.sort((a,b) => b.timestamp - a.timestamp).map(t => {
+                                            const from = t.fromUserId === 'admin-grant' ? {username: 'Admin'} : users.find(u => u.id === t.fromUserId);
+                                            const to = t.toUserId === 'marketplace' ? {username: 'Marketplace'} : users.find(u => u.id === t.toUserId);
+                                            return (
+                                                <tr key={t.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
+                                                    <td className="p-4 text-slate-400">{new Date(t.timestamp).toLocaleString()}</td>
+                                                    <td className="p-4 capitalize">{t.type}</td>
+                                                    <td className="p-4 font-semibold">{from?.username} → {to?.username}</td>
+                                                    <td className="p-4 text-slate-300">{t.description}</td>
+                                                    <td className="p-4 text-right font-semibold font-mono">{formatCurrency(t.amount)}</td>
+                                                </tr>
+                                            )
+                                        })}
+                                    </tbody>
+                                </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                     {view === 'reports' && (
                         <div>
                             <h1 className="text-4xl font-bold mb-8 text-white">User Reports</h1>
-                             <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left">
-                                        <thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">Reporter</th><th className="p-4">Reported</th><th className="p-4">Reason</th><th className="p-4">Date</th><th className="p-4">Status</th><th className="p-4 text-right">Actions</th></tr></thead>
-                                        <tbody>
-                                            {reports.sort((a,b) => b.timestamp - a.timestamp).map(report => {
-                                                const reporter = users.find(u => u.id === report.reporterId);
-                                                const reported = users.find(u => u.id === report.reportedUserId);
-                                                const statusColor = report.status === 'pending' ? 'text-amber-400' : report.status === 'resolved' ? 'text-green-400' : 'text-slate-400';
-                                                return (
-                                                <tr key={report.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
-                                                    <td className="p-4 font-semibold">{reporter?.username || 'Unknown'}</td>
-                                                    <td className="p-4 font-semibold">{reported?.username || 'Unknown'}</td>
-                                                    <td className="p-4 text-slate-300 max-w-sm whitespace-pre-wrap">{report.reason}</td>
-                                                    <td className="p-4 text-slate-400">{new Date(report.timestamp).toLocaleString()}</td>
-                                                    <td className={`p-4 font-semibold capitalize ${statusColor}`}>{report.status}</td>
-                                                    <td className="p-4 text-right space-x-2">
-                                                        {report.status === 'pending' && (
-                                                            <>
-                                                                <button onClick={() => onUpdateReportStatus(report.id, 'resolved')} className="px-3 py-1.5 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded font-semibold">Resolve</button>
-                                                                <button onClick={() => onUpdateReportStatus(report.id, 'dismissed')} className="px-3 py-1.5 text-xs bg-slate-500/20 hover:bg-slate-500/30 text-slate-300 rounded font-semibold">Dismiss</button>
-                                                            </>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            )})}
-                                            {reports.length === 0 && (<tr><td colSpan={6} className="text-center p-8 text-slate-500">No reports have been filed.</td></tr>)}
-                                        </tbody>
-                                    </table>
-                                </div>
-                             </div>
-                        </div>
-                    )}
-                    {view === 'groups' && ( <div><h1 className="text-4xl font-bold mb-8 text-white">Group Management</h1><div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">{chats.filter(c => c.type === ChatType.GROUP && c.id !== 'chat-announcements-global').map(group => { const creator = users.find(u => u.id === group.creatorId); return (<div key={group.id} className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-5 flex flex-col"><div className="flex items-center gap-4 mb-4"><div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0"><UsersIcon className="w-8 h-8"/></div><div className="overflow-hidden"><p className="font-bold text-lg truncate">{group.name}</p><p className="text-sm text-slate-400"> {group.members.length} Members</p></div></div><div className="space-y-3 text-sm text-slate-300 flex-grow mb-4"><p><strong className="text-slate-400">Created by:</strong> {creator?.username || 'Unknown'}</p><p><strong className="text-slate-400">Password:</strong> {group.password ? 'Protected' : 'None'}</p></div><div className="mt-4 grid grid-cols-3 gap-2"><button onClick={() => setViewingGroupChat(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><EyeIcon className="w-4 h-4" /> View</button><button onClick={() => openEditGroupModal(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm font-semibold transition-colors"><PencilIcon className="w-4 h-4" /> Edit</button><button onClick={() => handleDeleteGroupConfirm(group)} className="flex items-center justify-center gap-2 px-3 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-300 rounded-lg text-sm font-semibold transition-colors"><TrashIcon className="w-4 h-4" /> Del</button></div></div>); })}</div></div> )}
-                    {view === 'transactions' && (
-                         <div>
-                            <h1 className="text-4xl font-bold mb-8 text-white">Transaction Log</h1>
-                             <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-left">
-                                        <thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">Type</th><th className="p-4">From</th><th className="p-4">To</th><th className="p-4">Amount</th><th className="p-4">Date</th><th className="p-4">Details</th></tr></thead>
-                                        <tbody>
-                                            {transactions.sort((a,b) => b.timestamp - a.timestamp).map(t => {
-                                                const fromUser = users.find(u => u.id === t.fromUserId);
-                                                const toUser = users.find(u => u.id === t.toUserId);
-
-                                                let typeIcon, typeText, fromText, toText;
-                                                
-                                                switch(t.type) {
-                                                    case 'transfer':
-                                                        typeIcon = <CurrencyDollarIcon className="w-5 h-5 text-green-400" />;
-                                                        typeText = 'Transfer';
-                                                        fromText = fromUser?.username || 'Unknown User';
-                                                        toText = toUser?.username || 'Unknown User';
-                                                        break;
-                                                    case 'purchase':
-                                                        typeIcon = <ShoppingCartIcon className="w-5 h-5 text-cyan-400" />;
-                                                        typeText = 'Purchase';
-                                                        fromText = fromUser?.username || 'Unknown User';
-                                                        toText = 'Marketplace';
-                                                        break;
-                                                    case 'admin_grant':
-                                                        typeIcon = <ShieldCheckIcon className="w-5 h-5 text-amber-400" />;
-                                                        typeText = 'Admin Grant';
-                                                        fromText = 'Admin';
-                                                        toText = toUser?.username || 'Unknown User';
-                                                        break;
-                                                    default:
-                                                        typeIcon = null;
-                                                        typeText = (t.type as string).replace(/_/g, ' ');
-                                                        fromText = fromUser?.username || t.fromUserId;
-                                                        toText = toUser?.username || t.toUserId;
-                                                }
-                                                
-                                                return (
-                                                <tr key={t.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
-                                                    <td className="p-4">
-                                                        <div className="flex items-center gap-3">
-                                                            {typeIcon}
-                                                            <span className="font-semibold capitalize">{typeText}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4">{fromText}</td>
-                                                    <td className="p-4">{toText}</td>
-                                                    <td className="p-4 font-semibold font-mono text-cyan-300">{formatCurrency(t.amount)}</td>
-                                                    <td className="p-4 text-slate-400">{new Date(t.timestamp).toLocaleString()}</td>
-                                                    <td className="p-4 text-slate-300">{t.description}</td>
-                                                </tr>
-                                                )
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                             </div>
+                            <div className="space-y-4">
+                                {reports.sort((a,b) => b.timestamp - a.timestamp).map(report => {
+                                    const reporter = users.find(u => u.id === report.reporterId);
+                                    const reported = users.find(u => u.id === report.reportedUserId);
+                                    if (!reporter || !reported) return null;
+                                    return (
+                                        <div key={report.id} className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-5">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-bold text-lg"><UserName user={reported} /> reported by <UserName user={reporter} /></p>
+                                                    <p className="text-xs text-slate-400">{new Date(report.timestamp).toLocaleString()}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                                                        report.status === 'pending' ? 'bg-amber-500/20 text-amber-300' :
+                                                        report.status === 'resolved' ? 'bg-green-500/20 text-green-300' :
+                                                        'bg-slate-500/20 text-slate-300'
+                                                    }`}>{report.status.charAt(0).toUpperCase() + report.status.slice(1)}</span>
+                                                </div>
+                                            </div>
+                                            <p className="my-3 p-3 bg-white/5 rounded-lg whitespace-pre-wrap">{report.reason}</p>
+                                            {report.status === 'pending' && (
+                                                <div className="flex justify-end gap-2">
+                                                    <button onClick={() => onUpdateReportStatus(report.id, 'dismissed')} className="px-3 py-1.5 text-xs bg-slate-500/20 hover:bg-slate-500/30 text-slate-300 rounded-lg font-semibold">Dismiss</button>
+                                                    <button onClick={() => onUpdateReportStatus(report.id, 'resolved')} className="px-3 py-1.5 text-xs bg-green-500/20 hover:bg-green-500/30 text-green-300 rounded-lg font-semibold">Mark as Resolved</button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                                 {reports.length === 0 && <p className="text-center text-slate-500 p-8">No reports found.</p>}
+                            </div>
                         </div>
                     )}
                     {view === 'announcements' && (
-                         <div>
-                            <h1 className="text-4xl font-bold mb-8 text-white">Announcement Analytics</h1>
-                             <div className="grid grid-cols-1 gap-6">
-                                <div className="bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10">
-                                    <h3 className="text-slate-400 text-sm font-semibold">Total Announcements Sent</h3>
-                                    <p className="text-4xl font-bold text-white">{announcements.length}</p>
-                                </div>
-                                <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
-                                    <div className="overflow-x-auto">
-                                        <table className="w-full text-left">
-                                            <thead className="border-b border-white/10 text-sm text-slate-400">
-                                                <tr>
-                                                    <th className="p-4">Sent By</th>
-                                                    <th className="p-4">Message</th>
-                                                    <th className="p-4">Date</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {announcements.length > 0 ? announcements.map(announcement => {
-                                                    const author = users.find(u => u.id === announcement.authorId);
-                                                    return (
-                                                        <tr key={announcement.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
-                                                            <td className="p-4 font-semibold">{author?.username || 'Unknown Admin'}</td>
-                                                            <td className="p-4 text-slate-300 max-w-lg whitespace-pre-wrap">{announcement.text}</td>
-                                                            <td className="p-4 text-slate-400">{new Date(announcement.timestamp).toLocaleString()}</td>
-                                                        </tr>
-                                                    );
-                                                }) : (
-                                                    <tr>
-                                                        <td colSpan={3} className="text-center p-8 text-slate-500">No announcements have been sent.</td>
-                                                    </tr>
-                                                )}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Announcements</h1>
+                            <div className="bg-black/20 backdrop-blur-xl p-6 rounded-2xl border border-white/10 mb-8">
+                                <h3 className="text-slate-300 font-semibold mb-2">New Broadcast</h3>
+                                <textarea value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} placeholder="Send a message to all users..." rows={3} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2"></textarea>
+                                <button onClick={handleBroadcast} disabled={!broadcastMessage.trim() || isBroadcasting} className="w-full px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg transition-colors font-semibold disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70 flex items-center justify-center gap-2"><MegaphoneIcon className="w-5 h-5" />{isBroadcasting ? 'Sending...' : 'Broadcast'}</button>
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-bold mb-4 text-slate-300">History</h3>
+                                <div className="space-y-4">
+                                    {announcements.map(announcement => (
+                                        <div key={announcement.id} className="bg-black/20 p-4 rounded-xl border border-white/10">
+                                            <p className="text-slate-200 whitespace-pre-wrap">{announcement.text}</p>
+                                            <p className="text-xs text-slate-500 mt-2">{new Date(announcement.timestamp).toLocaleString()}</p>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
@@ -656,77 +670,121 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 </main>
             </div>
 
-            <div className={`fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 transition-opacity duration-300 ${isEditUserModalOpen || isPasswordModalOpen || isEditGroupModalOpen || isVerificationModalOpen || isGrantModalOpen || isFreezeModalOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
-                <div className={`bg-slate-900/50 backdrop-blur-2xl rounded-2xl p-6 w-full max-w-lg border border-white/10 shadow-2xl flex flex-col transition-all duration-300 ${isEditUserModalOpen || isPasswordModalOpen || isEditGroupModalOpen || isVerificationModalOpen || isGrantModalOpen || isFreezeModalOpen ? 'scale-100' : 'scale-95'}`}>
-                    <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-white">{isEditUserModalOpen && `Edit ${selectedUser?.username}`}{isPasswordModalOpen && `Reset Password for ${selectedUser?.username}`}{isEditGroupModalOpen && `Edit ${selectedGroup?.name}`}{isVerificationModalOpen && `Manage Verification for ${selectedUser?.username}`}{isGrantModalOpen && `Grant Funds to ${selectedUser?.username}`}{isFreezeModalOpen && `Freeze Account: ${selectedUser?.username}`}</h2><button onClick={closeAllModals} className="p-1 text-slate-400 hover:text-white"><XMarkIcon /></button></div>
-                    {isEditUserModalOpen && selectedUser && (
-                        <div>
-                            <div className="border-b border-white/10 mb-4"><nav className="flex -mb-px"><button onClick={() => setModalView('profile')} className={`px-4 py-2 text-sm font-medium border-b-2 ${modalView === 'profile' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}>Profile</button><button onClick={() => setModalView('connections')} className={`px-4 py-2 text-sm font-medium border-b-2 ${modalView === 'connections' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}>Connections</button><button onClick={() => setModalView('wallet')} className={`px-4 py-2 text-sm font-medium border-b-2 ${modalView === 'wallet' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}>Wallet</button></nav></div>
-                            {modalView === 'profile' ? (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Avatar (Emoji/Char)</label><input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Bio</label><textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Email Address</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Phone Number</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Daily Message Limit (0 or empty for unlimited)</label><input type="number" value={messageLimit === undefined ? '' : messageLimit} onChange={e => setMessageLimit(e.target.value === '' ? undefined : Number(e.target.value))} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" /></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleProfileUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button></div></div>) : null}
-                            {modalView === 'connections' ? (<div><h3 className="text-lg font-semibold mb-3">Block User</h3><div className="flex gap-2"><input type="text" value={blockUsername} onChange={e => setBlockUsername(e.target.value)} placeholder="Enter username to block" className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /><button onClick={handleAdminBlockUser} disabled={isSubmitting || !blockUsername.trim()} className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded-lg font-semibold disabled:bg-slate-600">Block</button></div><div className="mt-4"><h3 className="text-lg font-semibold mb-2">Current Connections</h3><div className="max-h-60 overflow-y-auto custom-scrollbar pr-2 -mr-2">{connections.filter(c => c.fromUserId === selectedUser.id || c.toUserId === selectedUser.id).map(c => { const otherUser = users.find(u => u.id === (c.fromUserId === selectedUser.id ? c.toUserId : c.fromUserId)); return (<div key={c.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg mb-2"><div><p className="font-semibold">{otherUser?.username}</p><p className="text-xs capitalize" style={{color: c.status === 'accepted' ? '#4ade80' : c.status === 'blocked' ? '#f87171' : '#fbbf24'}}>{c.status}</p></div><button onClick={() => onDeleteConnection(c.id)} className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-full"><TrashIcon className="w-4 h-4"/></button></div>); })}</div></div></div>) : null}
-                            {modalView === 'wallet' ? (<div><div className="text-center bg-black/20 p-4 rounded-lg mb-4"><p className="text-sm text-slate-400">Current Balance</p><p className="text-3xl font-bold text-cyan-300">{formatCurrency(selectedUser.walletBalance)}</p></div><h3 className="text-lg font-semibold mb-3">Grant Funds</h3><div className="flex gap-2"><input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)} min="0" placeholder="Amount to grant" className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /><button onClick={handleAdminGrantFunds} disabled={isSubmitting || !grantAmount.trim()} className="px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg font-semibold disabled:bg-slate-600">Grant</button></div><div className="mt-4"><h3 className="text-lg font-semibold mb-2">Transaction History</h3><div className="max-h-60 overflow-y-auto custom-scrollbar pr-2 -mr-2">{transactions.filter(t => t.fromUserId === selectedUser.id || t.toUserId === selectedUser.id).sort((a,b) => b.timestamp - a.timestamp).map(t => (<div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center mb-1"><div><p className="font-semibold">{t.description}</p><p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p></div><p className={`font-bold ${t.fromUserId === selectedUser.id ? 'text-red-400' : 'text-green-400'}`}>{t.fromUserId === selectedUser.id ? '-' : '+'}{formatCurrency(t.amount)}</p></div>))}</div></div></div>) : null}
+            {/* Modals */}
+            {isEditUserModalOpen && selectedUser && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeAllModals}>
+                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-3xl w-full max-w-2xl border border-white/10 shadow-2xl shadow-black/40 flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 flex justify-between items-center border-b border-white/10">
+                            <h2 className="text-2xl font-bold text-white">Manage User: <UserName user={selectedUser}/></h2>
+                            <button onClick={closeAllModals} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10 transition-colors"><XMarkIcon /></button>
                         </div>
-                    )}
-                    {isPasswordModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">New Password</label><input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handlePasswordReset} disabled={isSubmitting || !newPassword.trim()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Reset Password'}</button></div></div>)}
-                    {isEditGroupModalOpen && selectedGroup && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Name</label><input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Password (optional)</label><input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><h3 className="text-lg font-semibold mt-2 mb-2 text-slate-300">Members</h3><div className="max-h-48 overflow-y-auto custom-scrollbar pr-2 -mr-2 space-y-2">{users.filter(u => u.id !== currentUser.id).map(user => (<div key={user.id} onClick={() => toggleGroupMember(user.id)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${groupMembers.includes(user.id) ? 'bg-blue-500/30' : 'hover:bg-white/5'}`}><AvatarWithBorder user={user} containerClasses="w-8 h-8" textClasses="text-sm" /><span className="font-semibold">{user.username}</span><div className={`ml-auto w-5 h-5 rounded-full flex items-center justify-center border-2 ${groupMembers.includes(user.id) ? 'bg-blue-500 border-blue-400' : 'border-slate-500 bg-white/10'}`}> {groupMembers.includes(user.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}</div></div>))}</div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleGroupUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button></div></div>)}
-                    {isVerificationModalOpen && selectedUser && (
-                        <div className="space-y-4">
+                        <div className="flex border-b border-white/10">
+                            <button onClick={() => setModalView('profile')} className={`flex-1 p-3 text-sm font-semibold ${modalView === 'profile' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Profile</button>
+                            <button onClick={() => setModalView('connections')} className={`flex-1 p-3 text-sm font-semibold ${modalView === 'connections' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Connections</button>
+                            <button onClick={() => setModalView('wallet')} className={`flex-1 p-3 text-sm font-semibold ${modalView === 'wallet' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Wallet</button>
+                        </div>
+                        <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                            {modalView === 'profile' && (
+                                <>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div><label className="block text-sm font-medium text-slate-300 mb-1">Avatar</label><input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                                        <div><label className="block text-sm font-medium text-slate-300 mb-1">Message Limit</label><input type="number" value={messageLimit === undefined ? '' : messageLimit} onChange={e => setMessageLimit(e.target.value === '' ? undefined : parseInt(e.target.value, 10))} placeholder="Unlimited" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                                        <div><label className="block text-sm font-medium text-slate-300 mb-1">Email</label><input type="email" value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                                        <div><label className="block text-sm font-medium text-slate-300 mb-1">Phone</label><input type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                                    </div>
+                                    <div><label className="block text-sm font-medium text-slate-300 mb-1">Bio</label><textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white"></textarea></div>
+                                </>
+                            )}
+                            {modalView === 'connections' && (
+                                 <div><h3 className="font-semibold text-lg mb-2">Block User</h3><div className="flex gap-2"><input type="text" value={blockUsername} onChange={e => setBlockUsername(e.target.value)} placeholder="Enter username to block" className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /><button onClick={handleAdminBlockUser} disabled={isSubmitting || !blockUsername.trim()} className="px-4 py-2 bg-red-600/80 hover:bg-red-600 rounded-lg font-semibold disabled:opacity-50">Block</button></div></div>
+                            )}
+                            {modalView === 'wallet' && (
+                                 <div><h3 className="font-semibold text-lg mb-2">Grant Funds</h3><div className="flex gap-2"><input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /><button onClick={handleAdminGrantFunds} disabled={isSubmitting || !grantAmount.trim()} className="px-4 py-2 bg-green-600/80 hover:bg-green-600 rounded-lg font-semibold disabled:opacity-50">Grant</button></div></div>
+                            )}
+                        </div>
+                        <div className="p-6 flex justify-end gap-3 border-t border-white/10">
+                            <button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button>
+                            <button onClick={handleProfileUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:opacity-50">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+             {isPasswordModalOpen && selectedUser && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeAllModals}>
+                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-3xl w-full max-w-sm border border-white/10 shadow-2xl shadow-black/40 flex flex-col" onClick={e => e.stopPropagation()}>
+                         <div className="p-6 border-b border-white/10"><h2 className="text-2xl font-bold text-white">Reset Password for <UserName user={selectedUser}/></h2></div>
+                         <div className="p-6 space-y-4"><label className="block text-sm font-medium text-slate-300 mb-1">New Password</label><input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                         <div className="p-6 flex justify-end gap-3 border-t border-white/10"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handlePasswordReset} disabled={isSubmitting || !newPassword.trim()} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:opacity-50">Reset</button></div>
+                    </div>
+                </div>
+            )}
+            {isEditGroupModalOpen && selectedGroup && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeAllModals}>
+                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-3xl w-full max-w-lg border border-white/10 shadow-2xl shadow-black/40 flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-white/10"><h2 className="text-2xl font-bold text-white">Edit Group: {selectedGroup.name}</h2></div>
+                        <div className="p-6 space-y-4">
+                            <div><label className="block text-sm font-medium text-slate-300 mb-1">Group Name</label><input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                            <div><label className="block text-sm font-medium text-slate-300 mb-1">Group Password (optional)</label><input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                            <div><h3 className="font-semibold text-lg mb-2">Members ({groupMembers.length})</h3><div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-2 -mr-2">{users.filter(u => !u.isAdmin).map(user => (<div key={user.id} className="flex items-center justify-between p-2 bg-white/5 rounded-lg"><span className="font-semibold">{user.username}</span><input type="checkbox" checked={groupMembers.includes(user.id)} onChange={() => toggleGroupMember(user.id)} className="w-5 h-5 rounded bg-white/20 border-white/30 text-cyan-500 focus:ring-cyan-500" /></div>))}</div></div>
+                        </div>
+                        <div className="p-6 flex justify-end gap-3 border-t border-white/10"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleGroupUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:opacity-50">Save Group</button></div>
+                    </div>
+                </div>
+            )}
+            {isVerificationModalOpen && selectedUser && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeAllModals}>
+                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-3xl w-full max-w-md border border-white/10 shadow-2xl shadow-black/40 flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-white/10"><h2 className="text-2xl font-bold text-white">Manage Verification for <UserName user={selectedUser}/></h2></div>
+                        <div className="p-6 space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-300 mb-1">Badge Type</label>
                                 <div className="relative" ref={badgeSelectorRef}>
-                                    <button 
-                                        type="button" 
-                                        onClick={() => setIsBadgeSelectorOpen(p => !p)} 
-                                        className="w-full flex items-center justify-between bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white hover:border-white/20 transition-colors"
-                                    >
+                                    <button type="button" onClick={() => setIsBadgeSelectorOpen(p => !p)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white flex items-center justify-between">
                                         <BadgeOption badge={badgeType} />
-                                        <ChevronDownIcon className={`w-5 h-5 text-slate-400 transition-transform ${isBadgeSelectorOpen ? 'rotate-180' : ''}`} />
+                                        <ChevronDownIcon className={`w-5 h-5 text-slate-400 ml-auto flex-shrink-0 transition-transform ${isBadgeSelectorOpen ? 'rotate-180' : ''}`} />
                                     </button>
                                     {isBadgeSelectorOpen && (
                                         <div className="absolute top-full mt-2 w-full bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-lg shadow-2xl z-20 p-1 space-y-1">
-                                            {(['none', 'blue', 'red', 'pink', 'gold', 'grey', 'pastel_blue', 'aurora'] as const).map(b => (
-                                                <button
-                                                    type="button"
-                                                    key={b}
-                                                    onClick={() => {
-                                                        setBadgeType(b);
-                                                        setIsBadgeSelectorOpen(false);
-                                                    }}
-                                                    className="w-full text-left p-2 rounded-md hover:bg-white/10 transition-colors"
-                                                >
-                                                    <BadgeOption badge={b} />
-                                                </button>
+                                            {(['none', 'blue', 'red', 'gold', 'pink', 'grey', 'pastel_blue', 'aurora'] as (VerificationBadgeType | 'none')[]).map(b => (
+                                                <div key={b} onClick={() => { setBadgeType(b); setIsBadgeSelectorOpen(false); }} className="p-2 rounded-md cursor-pointer hover:bg-cyan-500/20"><BadgeOption badge={b} /></div>
                                             ))}
                                         </div>
                                     )}
                                 </div>
                             </div>
-                            {badgeType !== 'none' && (
+                            {badgeType !== 'none' && (<div><label className="block text-sm font-medium text-slate-300 mb-1">Duration</label><div className="flex rounded-lg border border-white/10"><button onClick={() => setExpiryType('permanent')} className={`flex-1 px-3 py-2 text-sm font-semibold rounded-l-md ${expiryType === 'permanent' ? 'bg-white/10' : 'bg-white/5'}`}>Permanent</button><button onClick={() => setExpiryType('hours')} className={`flex-1 px-3 py-2 text-sm font-semibold border-x border-white/10 ${expiryType === 'hours' ? 'bg-white/10' : 'bg-white/5'}`}>Hours</button><button onClick={() => setExpiryType('days')} className={`flex-1 px-3 py-2 text-sm font-semibold rounded-r-md ${expiryType === 'days' ? 'bg-white/10' : 'bg-white/5'}`}>Days</button></div>{expiryType !== 'permanent' && <input type="number" value={expiryValue} onChange={e => setExpiryValue(e.target.value)} placeholder={`Enter number of ${expiryType}`} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white mt-2" />}</div>)}
+                        </div>
+                        <div className="p-6 flex justify-between items-center gap-3 border-t border-white/10">
+                            <button onClick={handleVerificationRevoke} disabled={isSubmitting} className="px-5 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg font-semibold disabled:opacity-50">Revoke</button>
+                            <button onClick={handleVerificationUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:opacity-50">Apply Changes</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {isGrantModalOpen && selectedUser && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeAllModals}>
+                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-3xl w-full max-w-sm border border-white/10 shadow-2xl shadow-black/40 flex flex-col" onClick={e => e.stopPropagation()}>
+                         <div className="p-6 border-b border-white/10"><h2 className="text-2xl font-bold text-white">Grant Funds to <UserName user={selectedUser}/></h2></div>
+                         <div className="p-6 space-y-4"><label className="block text-sm font-medium text-slate-300 mb-1">Amount (USD)</label><input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)} min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div>
+                         <div className="p-6 flex justify-end gap-3 border-t border-white/10"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleAdminGrantFunds} disabled={isSubmitting || !grantAmount.trim()} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 rounded-lg font-semibold disabled:opacity-50">Grant Funds</button></div>
+                    </div>
+                </div>
+            )}
+            {isFreezeModalOpen && selectedUser && (
+                 <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={closeAllModals}>
+                    <div className="bg-slate-900/50 backdrop-blur-2xl rounded-3xl w-full max-w-md border border-white/10 shadow-2xl shadow-black/40 flex flex-col" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-white/10"><h2 className="text-2xl font-bold text-white">Freeze Account for <UserName user={selectedUser}/></h2></div>
+                        <div className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Duration</label>
-                                <div className="flex gap-2">
-                                <select value={expiryType} onChange={e => setExpiryType(e.target.value as 'permanent' | 'hours' | 'days')} className="bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white">
-                                    <option value="permanent">Permanent</option>
-                                    <option value="hours">Hours</option>
-                                    <option value="days">Days</option>
-                                </select>
-                                {expiryType !== 'permanent' && (<input type="number" value={expiryValue} onChange={e => setExpiryValue(e.target.value)} min="1" placeholder={`Enter ${expiryType}`} className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" />)}
-                                </div>
-                            </div>
-                            )}
-                            <div className="mt-6 flex justify-between items-center">
-                                <button onClick={handleVerificationRevoke} disabled={isSubmitting} className="px-5 py-2.5 bg-red-600/50 hover:bg-red-600/70 text-white rounded-lg font-semibold">Revoke Badge</button>
-                                <div className="flex gap-3">
-                                    <button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button>
-                                    <button onClick={handleVerificationUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
-                                </div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Freeze Duration</label>
+                                <div className="flex rounded-lg border border-white/10"><button onClick={() => setFreezeType('permanent')} className={`flex-1 px-3 py-2 text-sm font-semibold rounded-l-md ${freezeType === 'permanent' ? 'bg-white/10' : 'bg-white/5'}`}>Permanent</button><button onClick={() => setFreezeType('hours')} className={`flex-1 px-3 py-2 text-sm font-semibold border-x border-white/10 ${freezeType === 'hours' ? 'bg-white/10' : 'bg-white/5'}`}>Hours</button><button onClick={() => setFreezeType('days')} className={`flex-1 px-3 py-2 text-sm font-semibold rounded-r-md ${freezeType === 'days' ? 'bg-white/10' : 'bg-white/5'}`}>Days</button></div>
+                                {freezeType !== 'permanent' && <input type="number" value={freezeValue} onChange={e => setFreezeValue(e.target.value)} placeholder={`Enter number of ${freezeType}`} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white mt-2" />}
                             </div>
                         </div>
-                    )}
-                    {isGrantModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Amount (USD)</label><input type="number" value={grantAmount} onChange={e => setGrantAmount(e.target.value)} min="0" placeholder="Amount to grant" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white" /></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleAdminGrantFunds} disabled={isSubmitting || !grantAmount.trim()} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 rounded-lg font-semibold">{isSubmitting ? 'Granting...' : 'Grant Funds'}</button></div></div>)}
-                    {isFreezeModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Freeze Duration</label><div className="flex gap-2"><select value={freezeType} onChange={e => setFreezeType(e.target.value as 'permanent' | 'hours' | 'days')} className="bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white"><option value="permanent">Permanent</option><option value="hours">Hours</option><option value="days">Days</option></select>{freezeType !== 'permanent' && (<input type="number" value={freezeValue} onChange={e => setFreezeValue(e.target.value)} min="1" placeholder={`Enter ${freezeType}`} className="flex-grow bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white" />)}</div></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleFreezeUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg font-semibold">{isSubmitting ? 'Freezing...' : 'Freeze Account'}</button></div></div>)}
+                        <div className="p-6 flex justify-end gap-3 border-t border-white/10"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleFreezeUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg font-semibold disabled:opacity-50">Freeze Account</button></div>
+                    </div>
                 </div>
-            </div>
+            )}
         </>
     );
 };

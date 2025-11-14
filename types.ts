@@ -102,3 +102,4 @@ export interface Report {
   status: 'pending' | 'resolved' | 'dismissed';
   chatIdAtTimeOfReport?: string;
 }
+// Health check comment
