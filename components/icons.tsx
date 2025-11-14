@@ -213,3 +213,10 @@ export const CurrencyDollarIcon: React.FC<{ className?: string }> = ({ className
         <path fillRule="evenodd" d="M3 8.25a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75A.75.75 0 013 8.25zM6.75 12a.75.75 0 01.75-.75H12a.75.75 0 010 1.5H7.5a.75.75 0 01-.75-.75zm.75 2.25a.75.75 0 000 1.5h3a.75.75 0 000-1.5h-3zM3 15.75a.75.75 0 01.75-.75h16.5a.75.75 0 010 1.5H3.75a.75.75 0 01-.75-.75z" clipRule="evenodd" />
     </svg>
 );
+
+export const PaintBrushIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M14.063 2.126a2.625 2.625 0 00-3.713 0L3 9.375a2.625 2.625 0 000 3.712l9.375 9.375a2.625 2.625 0 003.712 0l7.25-7.25a2.625 2.625 0 000-3.712l-5.563-5.562zM5.42 11.232a.75.75 0 111.06-1.06l4.238 4.237a.75.75 0 11-1.06 1.06L5.42 11.232z" />
+        <path d="M22.5 3.75a.75.75 0 00-1.5 0v3a.75.75 0 001.5 0v-3z" />
+    </svg>
+);

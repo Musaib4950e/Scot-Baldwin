@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction } from '../types';
-import { db } from './db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon } from './icons';
+import { db, MARKETPLACE_ITEMS } from './db';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 // Helper component for the visual badge selector
@@ -53,6 +53,28 @@ interface AdminPanelProps {
     onAdminGrantFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
     onAdminUpdateUserFreezeStatus: (userId: string, isFrozen: boolean, frozenUntil?: number) => Promise<void>;
 }
+
+const AvatarWithBorder: React.FC<{ user: User, containerClasses: string, textClasses: string }> = ({ user, containerClasses, textClasses }) => {
+    const borderId = user.customization?.profileBorderId;
+    const borderItem = borderId ? MARKETPLACE_ITEMS.borders.find(b => b.id === borderId) : null;
+    const style = borderItem ? borderItem.style : {};
+
+    return (
+        <div className={`${containerClasses} rounded-full flex-shrink-0`} style={style}>
+            <div className={`w-full h-full rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center font-bold ${textClasses}`}>{user.avatar}</div>
+        </div>
+    );
+};
+
+const UserName: React.FC<{ user: User, className?: string }> = ({ user, className }) => {
+    const colorId = user.customization?.nameColorId;
+    const colorItem = colorId ? MARKETPLACE_ITEMS.nameColors.find(c => c.id === colorId) : null;
+    const style = colorItem ? colorItem.style : {};
+    
+    return (
+        <span className={className} style={style}>{user.username}</span>
+    );
+};
 
 const renderUserBadge = (user: User) => {
     if (user?.verification?.status !== 'approved') return null;
@@ -298,8 +320,11 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             <div className="flex h-screen bg-black/30 text-white">
                 <aside className="w-64 flex-shrink-0 bg-black/20 backdrop-blur-2xl p-4 flex flex-col border-r border-white/10">
                     <div className="flex items-center gap-3 p-2 mb-6">
-                         <div className="relative flex-shrink-0"><div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-2xl font-bold">{currentUser.avatar}</div></div>
-                        <div className="overflow-hidden"><div className="flex items-center gap-1.5"><h2 className="font-bold text-lg truncate">{currentUser.username}</h2>{renderUserBadge(currentUser)}</div><p className="text-sm text-blue-300 flex items-center gap-1.5"><ShieldCheckIcon className="w-4 h-4" /> Administrator</p></div>
+                        <AvatarWithBorder user={currentUser} containerClasses="w-12 h-12" textClasses="text-2xl" />
+                        <div className="overflow-hidden">
+                            <div className="flex items-center gap-1.5"><UserName user={currentUser} className="font-bold text-lg truncate" />{renderUserBadge(currentUser)}</div>
+                            <p className="text-sm text-blue-300 flex items-center gap-1.5"><ShieldCheckIcon className="w-4 h-4" /> Administrator</p>
+                        </div>
                     </div>
                     <nav className="flex-grow space-y-2">
                         <button onClick={() => setView('dashboard')} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${view === 'dashboard' ? 'bg-gradient-to-r from-blue-500/80 to-purple-500/80 text-white font-semibold shadow-lg shadow-blue-500/20' : 'text-slate-300 hover:bg-white/5'}`}><ChartBarIcon className="w-6 h-6" /><span>Dashboard</span></button>
@@ -350,9 +375,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                 {users.filter(u => !u.isAdmin).map(user => (
                                     <div key={user.id} className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl p-5 flex flex-col">
                                         <div className="flex items-start gap-4 mb-4">
-                                            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold flex-shrink-0">{user.avatar}</div>
+                                            <AvatarWithBorder user={user} containerClasses="w-14 h-14" textClasses="text-2xl" />
                                             <div className="overflow-hidden flex-grow">
-                                                <div className="flex items-center gap-1.5"><p className="font-bold text-lg truncate">{user.username}</p>{renderUserBadge(user)}</div>
+                                                <div className="flex items-center gap-1.5"><UserName user={user} className="font-bold text-lg truncate" />{renderUserBadge(user)}</div>
                                                 <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${user.online ? 'bg-green-500/10 text-green-400' : 'bg-slate-500/10 text-slate-400'}`}><span className={`h-1.5 w-1.5 rounded-full ${user.online ? 'bg-green-500' : 'bg-slate-500'}`}></span>{user.online ? 'Online' : 'Offline'}</span>
                                             </div>
                                             <p className="text-lg font-bold text-cyan-300 flex-shrink-0">{formatCurrency(user.walletBalance)}</p>
@@ -383,9 +408,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                                 <tr key={user.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
                                                     <td className="p-4">
                                                         <div className="flex items-center gap-3">
-                                                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0">{user.avatar}</div>
+                                                            <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-xl" />
                                                             <div>
-                                                                <div className="flex items-center gap-1.5"><span className="font-semibold">{user.username}</span>{renderUserBadge(user)}</div>
+                                                                <div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold" />{renderUserBadge(user)}</div>
                                                                 <span className="text-xs text-slate-400">{user.email || 'No email'}</span>
                                                             </div>
                                                         </div>
@@ -453,8 +478,8 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                             <tr key={user.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
                                                 <td className="p-4">
                                                     <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0">{user.avatar}</div>
-                                                        <div><span className="font-semibold">{user.username}</span></div>
+                                                        <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-xl" />
+                                                        <div><UserName user={user} className="font-semibold" /></div>
                                                     </div>
                                                 </td>
                                                 <td className="p-4">
@@ -561,7 +586,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         </div>
                     )}
                     {isPasswordModalOpen && selectedUser && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">New Password</label><input type="text" value={newPassword} onChange={e => setNewPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handlePasswordReset} disabled={isSubmitting || !newPassword.trim()} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Reset Password'}</button></div></div>)}
-                    {isEditGroupModalOpen && selectedGroup && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Name</label><input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Password (optional)</label><input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><h3 className="text-lg font-semibold mt-2 mb-2 text-slate-300">Members</h3><div className="max-h-48 overflow-y-auto custom-scrollbar pr-2 -mr-2 space-y-2">{users.filter(u => u.id !== currentUser.id).map(user => (<div key={user.id} onClick={() => toggleGroupMember(user.id)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${groupMembers.includes(user.id) ? 'bg-blue-500/30' : 'hover:bg-white/5'}`}><div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{user.avatar}</div><span className="font-semibold">{user.username}</span><div className={`ml-auto w-5 h-5 rounded-full flex items-center justify-center border-2 ${groupMembers.includes(user.id) ? 'bg-blue-500 border-blue-400' : 'border-slate-500 bg-white/10'}`}> {groupMembers.includes(user.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}</div></div>))}</div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleGroupUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button></div></div>)}
+                    {isEditGroupModalOpen && selectedGroup && (<div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Name</label><input type="text" value={groupName} onChange={e => setGroupName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><div><label className="block text-sm font-medium text-slate-300 mb-1">Group Password (optional)</label><input type="text" value={groupPassword} onChange={e => setGroupPassword(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white" /></div><h3 className="text-lg font-semibold mt-2 mb-2 text-slate-300">Members</h3><div className="max-h-48 overflow-y-auto custom-scrollbar pr-2 -mr-2 space-y-2">{users.filter(u => u.id !== currentUser.id).map(user => (<div key={user.id} onClick={() => toggleGroupMember(user.id)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer ${groupMembers.includes(user.id) ? 'bg-blue-500/30' : 'hover:bg-white/5'}`}><AvatarWithBorder user={user} containerClasses="w-8 h-8" textClasses="text-sm" /><span className="font-semibold">{user.username}</span><div className={`ml-auto w-5 h-5 rounded-full flex items-center justify-center border-2 ${groupMembers.includes(user.id) ? 'bg-blue-500 border-blue-400' : 'border-slate-500 bg-white/10'}`}> {groupMembers.includes(user.id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}</div></div>))}</div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button><button onClick={handleGroupUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg font-semibold">{isSubmitting ? 'Saving...' : 'Save Changes'}</button></div></div>)}
                     {isVerificationModalOpen && selectedUser && (
                         <div className="space-y-4">
                             <div>

@@ -1,5 +1,16 @@
 export type VerificationBadgeType = 'blue' | 'red' | 'gold' | 'pink' | 'grey' | 'pastel_blue' | 'aurora';
 
+// NEW: Cosmetic types
+export interface ProfileCustomization {
+    profileBorderId?: string;
+    nameColorId?: string;
+}
+export interface Inventory {
+    borders: string[];
+    nameColors: string[];
+}
+
+
 export interface Verification {
   status: 'none' | 'pending' | 'approved';
   badgeType?: VerificationBadgeType;
@@ -24,6 +35,10 @@ export interface User {
   walletBalance: number; // User's currency balance
   isFrozen?: boolean;
   frozenUntil?: number; // timestamp, undefined for permanent
+  
+  // NEW: Customization fields
+  customization?: ProfileCustomization;
+  inventory?: Inventory;
 }
 
 export interface Message {

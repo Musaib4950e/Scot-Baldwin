@@ -14,6 +14,22 @@ const CONNECTIONS_STORE = 'connections';
 const TRANSACTIONS_STORE = 'transactions';
 const ANNOUNCEMENT_CHAT_ID = 'chat-announcements-global';
 
+// NEW: Marketplace items definition
+export const MARKETPLACE_ITEMS = {
+    borders: [
+        { id: 'border-neon-purple', name: 'Neon Purple Glow', price: 150, style: { padding: '2px', boxShadow: '0 0 10px #a855f7, 0 0 15px #a855f7', border: '2px solid #a855f780' } },
+        { id: 'border-cyan-pulse', name: 'Cyan Pulse', price: 200, style: { padding: '2px', animation: 'pulse-cyan 2s infinite', boxShadow: '0 0 8px #22d3ee' } },
+        { id: 'border-gold-solid', name: 'Solid Gold', price: 500, style: { padding: '2px', border: '3px solid #f59e0b' } },
+        { id: 'border-rainbow-animated', name: 'Rainbow Flow', price: 750, style: { padding: '2px', border: '3px solid transparent', background: 'linear-gradient(var(--angle), red, orange, yellow, green, blue, indigo, violet) border-box', animation: 'spin-rainbow 4s linear infinite', '--angle': '0deg' } as React.CSSProperties },
+    ],
+    nameColors: [
+        { id: 'color-aurora', name: 'Aurora', price: 300, style: { background: 'linear-gradient(to right, #ec4899, #8b5cf6, #3b82f6)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent', filter: 'drop-shadow(0 0 5px rgba(192, 132, 252, 0.5))' } },
+        { id: 'color-fire', name: 'Inferno', price: 250, style: { background: 'linear-gradient(to right, #f97316, #ef4444, #f59e0b)', WebkitBackgroundClip: 'text', backgroundClip: 'text', color: 'transparent' } },
+        { id: 'color-toxic', name: 'Toxic Green', price: 100, style: { color: '#84cc16' } },
+        { id: 'color-gold-text', name: 'Gold Standard', price: 400, style: { color: '#f59e0b' } },
+    ]
+};
+
 
 interface SessionState {
     currentUserId: string | null;
@@ -237,6 +253,8 @@ class Database {
           isAdmin: false,
           verification: { status: 'none' },
           walletBalance: 0,
+          inventory: { borders: [], nameColors: [] },
+          customization: {},
         };
         
         const userTx = db.transaction(USERS_STORE, 'readwrite');
@@ -717,7 +735,7 @@ class Database {
         return { success: true, message: 'Funds granted.' };
     }
     
-    purchaseItem = async (userId: string, cost: number, description: string, verification: Verification): Promise<{success: boolean, message: string}> => {
+    purchaseVerification = async (userId: string, cost: number, description: string, verification: Verification): Promise<{success: boolean, message: string}> => {
         await this.isInitialized;
         const db = await this.dbPromise;
         const tx = db.transaction([USERS_STORE, TRANSACTIONS_STORE], 'readwrite');
@@ -752,6 +770,81 @@ class Database {
         this.notifyDataChanged();
         return { success: true, message: 'Purchase successful!' };
     }
+
+    purchaseCosmetic = async (userId: string, item: { type: 'border' | 'nameColor', id: string, price: number, name: string }): Promise<{success: boolean, message: string}> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction([USERS_STORE, TRANSACTIONS_STORE], 'readwrite');
+        const userStore = tx.objectStore(USERS_STORE);
+        const transactionStore = tx.objectStore(TRANSACTIONS_STORE);
+
+        return new Promise((resolve) => {
+            tx.onerror = () => resolve({ success: false, message: 'Database error.' });
+            tx.oncomplete = () => {
+                this.notifyDataChanged();
+                resolve({ success: true, message: `${item.name} purchased!` });
+            };
+            
+            promisifyRequest(userStore.get(userId)).then(user => {
+                if (!user) {
+                    tx.abort();
+                    return resolve({ success: false, message: 'User not found.' });
+                }
+                if (user.walletBalance < item.price) {
+                    tx.abort();
+                    return resolve({ success: false, message: 'Insufficient funds.' });
+                }
+
+                if (!user.inventory) {
+                    user.inventory = { borders: [], nameColors: [] };
+                }
+                const inventoryList = item.type === 'border' ? user.inventory.borders : user.inventory.nameColors;
+                if (inventoryList.includes(item.id)) {
+                    tx.abort();
+                    return resolve({ success: false, message: 'You already own this item.' });
+                }
+
+                user.walletBalance -= item.price;
+                inventoryList.push(item.id);
+                userStore.put(user);
+                
+                const newTransaction: Transaction = {
+                    id: `txn-${Date.now()}`,
+                    type: 'purchase',
+                    fromUserId: userId,
+                    toUserId: 'marketplace',
+                    amount: item.price,
+                    timestamp: Date.now(),
+                    description: `Purchased cosmetic: ${item.name}`,
+                };
+                transactionStore.add(newTransaction);
+            });
+        });
+    }
+    
+    equipCustomization = async (userId: string, type: 'border' | 'nameColor', itemId: string | undefined): Promise<void> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction(USERS_STORE, 'readwrite');
+        const store = tx.objectStore(USERS_STORE);
+        const user = await promisifyRequest(store.get(userId));
+        
+        if (user) {
+            if (!user.customization) {
+                user.customization = {};
+            }
+            if (type === 'border') {
+                user.customization.profileBorderId = itemId;
+            } else if (type === 'nameColor') {
+                user.customization.nameColorId = itemId;
+            }
+            store.put(user);
+        }
+        
+        await new Promise<void>(r => tx.oncomplete = () => r());
+        this.notifyDataChanged();
+    }
+
 
     adminUpdateUserFreezeStatus = async (userId: string, isFrozen: boolean, frozenUntil?: number): Promise<void> => {
         await this.isInitialized;

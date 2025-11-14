@@ -250,7 +250,7 @@ const App: React.FC = () => {
         expiresAt,
     };
     const description = `Purchased ${badgeType} badge (${durationDays === 'permanent' ? 'Permanent' : `${durationDays} Days`})`;
-    const result = await db.purchaseItem(currentUser.id, cost, description, verification);
+    const result = await db.purchaseVerification(currentUser.id, cost, description, verification);
     if (result.success) await fetchData();
     return result;
   };
@@ -258,6 +258,19 @@ const App: React.FC = () => {
   const handleAdminUpdateUserFreezeStatus = async (userId: string, isFrozen: boolean, frozenUntil?: number) => {
     await db.adminUpdateUserFreezeStatus(userId, isFrozen, frozenUntil);
     await fetchData();
+  };
+  
+  const handlePurchaseCosmetic = async (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => {
+    if (!currentUser) return { success: false, message: "Not logged in" };
+    const result = await db.purchaseCosmetic(currentUser.id, item);
+    if (result.success) await fetchData();
+    return result;
+  };
+  
+  const handleEquipCustomization = async (type: 'border' | 'nameColor', itemId: string | undefined) => {
+      if (!currentUser) return;
+      await db.equipCustomization(currentUser.id, type, itemId);
+      await fetchData();
   };
 
 
@@ -322,6 +335,8 @@ const App: React.FC = () => {
             })}
             onTransferFunds={handleTransferFunds}
             onPurchaseVerification={handlePurchaseVerification}
+            onPurchaseCosmetic={handlePurchaseCosmetic}
+            onEquipCustomization={handleEquipCustomization}
           />
         )
       ) : (

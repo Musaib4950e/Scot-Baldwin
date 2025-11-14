@@ -83,6 +83,23 @@
         /* Add a subtle glow */
         filter: drop-shadow(0 0 5px rgba(192, 132, 252, 0.5));
       }
+
+      @keyframes pulse-cyan {
+        0%, 100% { box-shadow: 0 0 8px #22d3ee; }
+        50% { box-shadow: 0 0 16px #22d3ee, 0 0 24px #22d3ee; }
+      }
+
+      @keyframes spin-rainbow {
+        to {
+            --angle: 360deg;
+        }
+      }
+
+      @property --angle {
+        syntax: '<angle>';
+        initial-value: 0deg;
+        inherits: false;
+      }
     </style>
   <script type="importmap">
 {

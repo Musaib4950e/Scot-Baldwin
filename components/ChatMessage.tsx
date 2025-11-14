@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Message, User, VerificationBadgeType } from '../types';
 import { CheckBadgeIcon, MegaphoneIcon } from './icons';
+import { MARKETPLACE_ITEMS } from './db';
 
 interface ChatMessageProps {
   message: Message;
@@ -28,6 +29,17 @@ const parseRichText = (text: string) => {
     .replace(/`(.*?)`/g, '<code class="rich-text-code">$1</code>');
   
   return { __html: safeText };
+};
+
+
+const UserName: React.FC<{ user: User, className?: string }> = ({ user, className }) => {
+    const colorId = user.customization?.nameColorId;
+    const colorItem = colorId ? MARKETPLACE_ITEMS.nameColors.find(c => c.id === colorId) : null;
+    const style = colorItem ? colorItem.style : {};
+    
+    return (
+        <span className={className} style={style}>{user.username}</span>
+    );
 };
 
 
@@ -83,7 +95,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
       <div className={`flex flex-col max-w-lg lg:max-w-xl ${isCurrentUser ? 'items-end' : 'items-start'}`}>
          {isGroupChat && !isCurrentUser && (
             <div className="flex items-center gap-1.5 mb-1 ml-3">
-              <p className="text-xs text-cyan-300 font-semibold">{author.username}</p>
+              <UserName user={author} className="text-xs font-semibold" />
               {renderBadge(author)}
             </div>
          )}
