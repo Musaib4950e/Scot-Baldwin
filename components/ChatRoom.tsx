@@ -172,6 +172,10 @@ const ProfileModal: React.FC<{
             setTransferMessage({type: 'error', text: 'Please select a user and enter a valid amount.'});
             return;
         }
+        if (currentUser.walletBalance < amount) {
+            setTransferMessage({type: 'error', text: 'Insufficient funds.'});
+            return;
+        }
         setIsSubmitting(true);
         setTransferMessage({type: '', text: ''});
         const result = await onTransferFunds(transferUser, amount);
@@ -287,7 +291,7 @@ const ProfileModal: React.FC<{
                     </select>
                     <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
                     {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
-                    <button type="submit" disabled={isSubmitting} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                    <button type="submit" disabled={isSubmitting || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
                         {isSubmitting ? 'Sending...' : 'Send'}
                     </button>
                 </form>
@@ -364,8 +368,9 @@ const TransferModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     recipient: User;
+    currentUser: User;
     onTransfer: (amount: number) => Promise<{success: boolean, message: string}>;
-}> = ({ isOpen, onClose, recipient, onTransfer }) => {
+}> = ({ isOpen, onClose, recipient, currentUser, onTransfer }) => {
     const [amount, setAmount] = useState('');
     const [message, setMessage] = useState({ type: '', text: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -375,6 +380,10 @@ const TransferModal: React.FC<{
         const numAmount = parseFloat(amount);
         if (!numAmount || numAmount <= 0) {
             setMessage({ type: 'error', text: 'Please enter a valid amount.' });
+            return;
+        }
+        if (currentUser.walletBalance < numAmount) {
+            setMessage({ type: 'error', text: 'Insufficient funds.' });
             return;
         }
         setIsSubmitting(true);
@@ -402,7 +411,7 @@ const TransferModal: React.FC<{
                 {message.text && <p className={`text-sm text-center ${message.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{message.text}</p>}
                 <div className="flex justify-end gap-3 pt-2">
                     <button type="button" onClick={onClose} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button>
-                    <button type="submit" disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                    <button type="submit" disabled={isSubmitting || (!!parseFloat(amount) && currentUser.walletBalance < parseFloat(amount))} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
                         {isSubmitting ? 'Sending...' : 'Confirm Transfer'}
                     </button>
                 </div>
@@ -674,7 +683,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
 
       <AddAccountModal isOpen={isAddAccountModalOpen} onClose={() => setIsAddAccountModalOpen(false)} onLoginSuccess={onLogin} />
       <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} currentUser={currentUser} users={users} connections={connections} transactions={transactions} onUpdateProfile={onUpdateUserProfile} onRequestVerification={onRequestVerification} onTransferFunds={onTransferFunds} onPurchaseVerification={onPurchaseVerification} />
-      {otherUserInDM && <TransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} recipient={otherUserInDM} onTransfer={(amount) => onTransferFunds(otherUserInDM.id, amount)} />}
+      {otherUserInDM && <TransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} recipient={otherUserInDM} currentUser={currentUser} onTransfer={(amount) => onTransferFunds(otherUserInDM.id, amount)} />}
 
       <div className="h-screen flex bg-black/20">
       <aside className={`w-full md:w-1/3 lg:w-1/4 xl:w-1/5 flex flex-col bg-black/10 backdrop-blur-2xl border-r border-white/10 transition-transform duration-300 ease-in-out ${showChatList ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:flex`}>

@@ -1,9 +1,9 @@
 
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, aistudio, { useState, useMemo, useEffect } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction } from '../types';
 import { db } from './db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 
@@ -273,16 +273,50 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                              <div className="bg-black/20 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden">
                                 <div className="overflow-x-auto">
                                     <table className="w-full text-left">
-                                        <thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">Type</th><th className="p-4">From</th><th className="p-4">To</th><th className="p-4">Amount</th><th className="p-4">Date</th><th className="p-4">Description</th></tr></thead>
+                                        <thead className="border-b border-white/10 text-sm text-slate-400"><tr><th className="p-4">Type</th><th className="p-4">From</th><th className="p-4">To</th><th className="p-4">Amount</th><th className="p-4">Date</th><th className="p-4">Details</th></tr></thead>
                                         <tbody>
                                             {transactions.sort((a,b) => b.timestamp - a.timestamp).map(t => {
                                                 const fromUser = users.find(u => u.id === t.fromUserId);
                                                 const toUser = users.find(u => u.id === t.toUserId);
+
+                                                let typeIcon, typeText, fromText, toText;
+                                                
+                                                switch(t.type) {
+                                                    case 'transfer':
+                                                        typeIcon = <CurrencyDollarIcon className="w-5 h-5 text-green-400" />;
+                                                        typeText = 'Transfer';
+                                                        fromText = fromUser?.username || 'Unknown User';
+                                                        toText = toUser?.username || 'Unknown User';
+                                                        break;
+                                                    case 'purchase':
+                                                        typeIcon = <ShoppingCartIcon className="w-5 h-5 text-cyan-400" />;
+                                                        typeText = 'Purchase';
+                                                        fromText = fromUser?.username || 'Unknown User';
+                                                        toText = 'Marketplace';
+                                                        break;
+                                                    case 'admin_grant':
+                                                        typeIcon = <ShieldCheckIcon className="w-5 h-5 text-amber-400" />;
+                                                        typeText = 'Admin Grant';
+                                                        fromText = 'Admin';
+                                                        toText = toUser?.username || 'Unknown User';
+                                                        break;
+                                                    default:
+                                                        typeIcon = null;
+                                                        typeText = t.type.replace('_', ' ');
+                                                        fromText = fromUser?.username || t.fromUserId;
+                                                        toText = toUser?.username || t.toUserId;
+                                                }
+                                                
                                                 return (
                                                 <tr key={t.id} className="border-b border-white/10 hover:bg-white/5 text-sm">
-                                                    <td className="p-4 capitalize font-semibold">{t.type.replace('_', ' ')}</td>
-                                                    <td className="p-4">{fromUser?.username || t.fromUserId.replace('admin-', '')}</td>
-                                                    <td className="p-4">{toUser?.username || t.toUserId}</td>
+                                                    <td className="p-4">
+                                                        <div className="flex items-center gap-3">
+                                                            {typeIcon}
+                                                            <span className="font-semibold capitalize">{typeText}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">{fromText}</td>
+                                                    <td className="p-4">{toText}</td>
                                                     <td className="p-4 font-semibold font-mono text-cyan-300">{formatCurrency(t.amount)}</td>
                                                     <td className="p-4 text-slate-400">{new Date(t.timestamp).toLocaleString()}</td>
                                                     <td className="p-4 text-slate-300">{t.description}</td>
