@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useReducer, useEffect } from 'react';
 import { User, Chat, Message, Connection, ConnectionStatus } from './types';
 import GroupLocker from './components/GroupLocker';
@@ -62,7 +60,6 @@ const App: React.FC = () => {
     const handleBeforeUnload = () => {
         // Log out the user when the tab is closed to set their status to offline
         if (db.isUserLoggedIn()) {
-            // FIX: Property 'logout' does not exist on type 'Database'.
             db.logout();
         }
     };
@@ -98,7 +95,6 @@ const App: React.FC = () => {
   };
   
   const handleLogout = async () => {
-    // FIX: Property 'logout' does not exist on type 'Database'.
     await db.logout();
     setCurrentUser(null);
     setLoggedInUsers([]);
@@ -106,21 +102,18 @@ const App: React.FC = () => {
   };
 
   const handleSwitchUser = async (userId: string) => {
-    // FIX: Property 'switchCurrentUser' does not exist on type 'Database'.
     await db.switchCurrentUser(userId);
     setCurrentUser(await db.getCurrentUser());
   };
 
   const handleSendMessage = async (chatId: string, text: string) => {
     if (!currentUser) return;
-    // FIX: Property 'addMessage' does not exist on type 'Database'.
     await db.addMessage(chatId, currentUser.id, text);
     setMessages(await db.getMessages());
   };
   
   const handleCreateChat = async (targetUser: User): Promise<Chat> => {
     if (!currentUser) throw new Error("No current user");
-    // FIX: Property 'findOrCreateDM' does not exist on type 'Database'.
     const newChat = await db.findOrCreateDM(currentUser, targetUser);
     setChats(await db.getChats());
     return newChat;
@@ -128,14 +121,12 @@ const App: React.FC = () => {
 
   const handleCreateGroupChat = async ({memberIds, groupName}: CreateGroupChatParams): Promise<Chat> => {
       if (!currentUser) throw new Error("No current user");
-      // FIX: Property 'createGroupChat' does not exist on type 'Database'.
       const newChat = await db.createGroupChat(currentUser.id, memberIds, groupName);
       setChats(await db.getChats());
       return newChat;
   };
 
   const handleUpdateUserProfile = async ({ userId, avatar, bio, email, phone, messageLimit }: UpdateProfileParams) => {
-      // FIX: Property 'updateUserProfile' does not exist on type 'Database'.
       await db.updateUserProfile(userId, { avatar, bio, email, phone, messageLimit });
       const updatedUsers = await db.getUsers();
       setUsers(updatedUsers);
@@ -145,31 +136,26 @@ const App: React.FC = () => {
   };
 
   const handleResetUserPassword = async (userId: string, newPassword: string) => {
-      // FIX: Property 'resetUserPassword' does not exist on type 'Database'.
       await db.resetUserPassword(userId, newPassword);
       setUsers(await db.getUsers());
   };
 
   const handleUpdateGroupDetails = async ({ chatId, name, password }: UpdateGroupDetailsParams) => {
-    // FIX: Property 'updateGroupDetails' does not exist on type 'Database'.
     await db.updateGroupDetails(chatId, { name, password });
     setChats(await db.getChats());
   };
 
   const handleUpdateGroupMembers = async (chatId: string, memberIds: string[]) => {
-    // FIX: Property 'updateGroupMembers' does not exist on type 'Database'.
     await db.updateGroupMembers(chatId, memberIds);
     setChats(await db.getChats());
   };
 
   const handleDeleteUser = async (userId: string) => {
-    // FIX: Property 'deleteUser' does not exist on type 'Database'.
     await db.deleteUser(userId);
     await fetchData(); // Refetch all data as this is a major change
   };
 
   const handleDeleteGroup = async (chatId: string) => {
-    // FIX: Property 'deleteGroup' does not exist on type 'Database'.
     await db.deleteGroup(chatId);
     setChats(await db.getChats());
     setMessages(await db.getMessages());
@@ -178,19 +164,16 @@ const App: React.FC = () => {
   // --- Connection Handlers ---
   const handleSendRequest = async (toUserId: string) => {
       if (!currentUser) return;
-      // FIX: Property 'addConnection' does not exist on type 'Database'.
       await db.addConnection(currentUser.id, toUserId);
       setConnections(await db.getConnections());
   };
 
   const handleUpdateConnection = async (connectionId: string, status: ConnectionStatus) => {
-      // FIX: Property 'updateConnection' does not exist on type 'Database'.
       const updatedConnection = await db.updateConnection(connectionId, status);
       if (updatedConnection && status === ConnectionStatus.ACCEPTED) {
           const user1 = users.find(u => u.id === updatedConnection.fromUserId);
           const user2 = users.find(u => u.id === updatedConnection.toUserId);
           if (user1 && user2) {
-              // FIX: Property 'findOrCreateDM' does not exist on type 'Database'.
               await db.findOrCreateDM(user1, user2);
               setChats(await db.getChats());
           }
@@ -199,7 +182,6 @@ const App: React.FC = () => {
   };
 
   const handleDeleteConnection = async (connectionId: string) => {
-      // FIX: Property 'deleteConnection' does not exist on type 'Database'. Did you mean 'getConnections'?
       await db.deleteConnection(connectionId);
       setConnections(await db.getConnections());
   };
@@ -218,7 +200,6 @@ const App: React.FC = () => {
   // --- Admin Handlers ---
   const handleBroadcastAnnouncement = async (text: string) => {
     if (!currentUser || !currentUser.isAdmin) return;
-    // FIX: Property 'addBroadcastAnnouncement' does not exist on type 'Database'.
     await db.addBroadcastAnnouncement(text, currentUser.id);
     setMessages(await db.getMessages());
     // Potentially re-fetch chats if announcement chat wasn't there before
@@ -226,7 +207,6 @@ const App: React.FC = () => {
   };
   
   const handleAdminForceConnectionStatus = async (fromUserId: string, toUserId: string, status: ConnectionStatus) => {
-    // FIX: Property 'adminForceConnectionStatus' does not exist on type 'Database'.
     await db.adminForceConnectionStatus(fromUserId, toUserId, status);
     setConnections(await db.getConnections());
   };
@@ -281,8 +261,12 @@ const App: React.FC = () => {
             onSendRequest={handleSendRequest}
             onUpdateConnection={handleUpdateConnection}
             onRequestVerification={handleRequestVerification}
-            {/* FIX: Argument of type '{ userId: string; avatar: string; bio: string; }' is not assignable to parameter of type 'UpdateProfileParams'. */}
-            onUpdateUserProfile={(params) => handleUpdateUserProfile({ ...params, userId: currentUser.id, email: currentUser.email || '', phone: currentUser.phone || '' })}
+            onUpdateUserProfile={(params) => handleUpdateUserProfile({
+                ...params,
+                userId: currentUser.id,
+                email: currentUser.email || '',
+                phone: currentUser.phone || ''
+            })}
           />
         )
       ) : (

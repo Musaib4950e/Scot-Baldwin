@@ -470,11 +470,15 @@ class Database {
         // Also delete messages
         const msgStore = tx.objectStore(MESSAGES_STORE);
         const msgIndex = msgStore.index('chatId');
-        let cursor = await promisifyRequest(msgIndex.openCursor(IDBKeyRange.only(chatId)));
-        while(cursor) {
-            msgStore.delete(cursor.primaryKey);
-            cursor = await promisifyRequest(cursor.continue());
+        
+        // FIX: The original cursor-based loop was incorrect for promise-based iteration.
+        // cursor.continue() returns void and cannot be promisified, causing a type error.
+        // This is replaced with a more robust getAllKeys() which is compatible with async/await.
+        const keys = await promisifyRequest(msgIndex.getAllKeys(IDBKeyRange.only(chatId)));
+        for (const key of keys) {
+            msgStore.delete(key);
         }
+
         await new Promise<void>(r => tx.oncomplete = () => r());
         this.notifyDataChanged();
     }
