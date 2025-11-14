@@ -1,9 +1,9 @@
 
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import type { Chat, Message, User, Connection } from '../types';
+import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db } from './db';
 
@@ -13,6 +13,7 @@ interface ChatRoomProps {
   chats: Chat[];
   messages: Message[];
   connections: Connection[];
+  transactions: Transaction[];
   loggedInUsers: User[];
   onSendMessage: (chatId: string, text: string) => Promise<void>;
   onCreateChat: (targetUser: User) => Promise<Chat>;
@@ -24,6 +25,8 @@ interface ChatRoomProps {
   onUpdateConnection: (connectionId: string, status: ConnectionStatus) => Promise<void>;
   onRequestVerification: (userId: string) => Promise<void>;
   onUpdateUserProfile: (params: { avatar: string, bio: string }) => Promise<void>;
+  onTransferFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
+  onPurchaseVerification: (badgeType: VerificationBadgeType, duration: number | 'permanent', cost: number) => Promise<{success: boolean, message: string}>;
 }
 
 // --- Helper Functions ---
@@ -38,7 +41,7 @@ const getChatDisplayName = (chat: Chat, currentUser: User, users: User[]): strin
 
 const renderUserBadge = (user: User, size: 'small' | 'large' = 'small') => {
     if (user?.verification?.status !== 'approved') return null;
-    if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null; // Expired
+    if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null;
 
     const colorClasses = {
         blue: 'text-blue-400',
@@ -56,6 +59,10 @@ const renderUserBadge = (user: User, size: 'small' | 'large' = 'small') => {
     return <CheckBadgeIcon className={`${sizeClass} ${badgeColor} flex-shrink-0`} />;
 };
 
+const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+};
+
 const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.ReactNode; maxWidth?: string; }> = ({ isOpen, onClose, children, maxWidth = 'max-w-sm' }) => {
     const [isVisible, setIsVisible] = useState(isOpen);
 
@@ -63,7 +70,6 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.Re
         if (isOpen) {
             setIsVisible(true);
         } else {
-            // Delay unmounting for exit animation
             const timer = setTimeout(() => setIsVisible(false), 300);
             return () => clearTimeout(timer);
         }
@@ -86,21 +92,60 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.Re
     );
 }
 
-// --- Profile Settings Modal ---
-const ProfileSettingsModal: React.FC<{
+// --- Profile, Wallet & Marketplace Modal ---
+const ProfileModal: React.FC<{
     isOpen: boolean;
     onClose: () => void;
     currentUser: User;
+    users: User[];
+    connections: Connection[];
+    transactions: Transaction[];
     onUpdateProfile: (params: { avatar: string, bio: string }) => Promise<void>;
     onRequestVerification: (userId: string) => Promise<void>;
-}> = ({ isOpen, onClose, currentUser, onUpdateProfile, onRequestVerification }) => {
-    const [avatar, setAvatar] = useState(currentUser.avatar);
-    const [bio, setBio] = useState(currentUser.bio || '');
+    onTransferFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
+    onPurchaseVerification: (badgeType: VerificationBadgeType, duration: number | 'permanent', cost: number) => Promise<{success: boolean, message: string}>;
+}> = (props) => {
+    const { isOpen, onClose, currentUser, users, connections, transactions, onUpdateProfile, onRequestVerification, onTransferFunds, onPurchaseVerification } = props;
+    
+    const [view, setView] = useState<'profile' | 'wallet' | 'market'>('profile');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Profile state
+    const [avatar, setAvatar] = useState(currentUser.avatar);
+    const [bio, setBio] = useState(currentUser.bio || '');
+
+    // Wallet state
+    const [transferUser, setTransferUser] = useState('');
+    const [transferAmount, setTransferAmount] = useState('');
+    const [transferMessage, setTransferMessage] = useState({ type: '', text: '' });
+    
+    const userTransactions = useMemo(() => {
+        return transactions
+            .filter(t => t.fromUserId === currentUser.id || t.toUserId === currentUser.id)
+            .sort((a, b) => b.timestamp - a.timestamp);
+    }, [transactions, currentUser.id]);
+
+    const connectedUsers = useMemo(() => {
+        const acceptedUserIds = new Set(
+            connections
+                .filter(c => c.status === ConnectionStatus.ACCEPTED && (c.fromUserId === currentUser.id || c.toUserId === currentUser.id))
+                .flatMap(c => [c.fromUserId, c.toUserId])
+        );
+        return users.filter(u => u.id !== currentUser.id && acceptedUserIds.has(u.id));
+    }, [connections, users, currentUser.id]);
+
+
+    // Badge Prices
+    const badgePrices = {
+        blue: { 7: 5, 30: 15, permanent: 50 },
+        red: { 7: 10, 30: 25, permanent: 75 },
+        pink: { 7: 15, 30: 40, permanent: 90 },
+        gold: { permanent: 100 },
+    };
+
     useEffect(() => {
-      setAvatar(currentUser.avatar);
-      setBio(currentUser.bio || '');
+        setAvatar(currentUser.avatar);
+        setBio(currentUser.bio || '');
     }, [currentUser]);
 
     const handleUpdate = async () => {
@@ -115,61 +160,211 @@ const ProfileSettingsModal: React.FC<{
         await onRequestVerification(currentUser.id);
         setIsSubmitting(false);
     };
-    
-    const renderVerificationStatus = () => {
-        const verification = currentUser.verification;
-        const isExpired = verification?.expiresAt && verification.expiresAt < Date.now();
 
-        switch (verification?.status) {
-            case 'approved':
-                if (isExpired) {
-                    return <p className="text-sm text-center text-slate-400 bg-slate-500/10 p-3 rounded-lg">Your verification has expired.</p>;
-                }
-                const badgeText = `You are verified with a ${verification.badgeType || 'blue'} badge.`;
-                const expiryText = verification.expiresAt ? `Expires on ${new Date(verification.expiresAt).toLocaleDateString()}` : "This badge is permanent.";
-                return <div className="text-sm text-center text-blue-300 flex flex-col items-center justify-center gap-2 bg-blue-500/10 p-3 rounded-lg">
-                    <div className="flex items-center gap-2">
-                        {renderUserBadge(currentUser)}
-                        <span>{badgeText}</span>
-                    </div>
-                    <span className="text-xs text-slate-400">{expiryText}</span>
-                </div>;
-            case 'pending':
-                return <p className="text-sm text-center text-amber-300 bg-amber-500/10 p-3 rounded-lg">Your verification request is pending.</p>;
-            default:
-                return <button onClick={handleRequest} disabled={isSubmitting} className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">
-                    {isSubmitting ? 'Submitting...' : 'Request Verification'}
-                </button>;
+    const handleTransfer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const amount = parseFloat(transferAmount);
+        if (!transferUser || !amount || amount <= 0) {
+            setTransferMessage({type: 'error', text: 'Please select a user and enter a valid amount.'});
+            return;
+        }
+        setIsSubmitting(true);
+        setTransferMessage({type: '', text: ''});
+        const result = await onTransferFunds(transferUser, amount);
+        if (result.success) {
+            setTransferMessage({type: 'success', text: result.message});
+            setTransferUser('');
+            setTransferAmount('');
+        } else {
+            setTransferMessage({type: 'error', text: result.message});
+        }
+        setIsSubmitting(false);
+    };
+
+    const handlePurchase = async (badge: VerificationBadgeType, duration: keyof typeof badgePrices[VerificationBadgeType], cost: number) => {
+        if (currentUser.walletBalance < cost) {
+            alert("Insufficient funds.");
+            return;
+        }
+        if (window.confirm(`Are you sure you want to purchase the ${badge} badge for ${formatCurrency(cost)}?`)) {
+            setIsSubmitting(true);
+            const durationDays = duration === 'permanent' ? 'permanent' : duration;
+            await onPurchaseVerification(badge, durationDays, cost);
+            setIsSubmitting(false);
         }
     }
+    
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-md">
+             <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">My Account</h2>
+                <button onClick={onClose} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10 transition-colors"><XMarkIcon /></button>
+            </div>
+            <div className="border-b border-white/10 mb-4">
+                <nav className="flex -mb-px space-x-2">
+                    <button onClick={() => setView('profile')} className={`px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'profile' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><PencilIcon className="w-4 h-4" /> Profile</button>
+                    <button onClick={() => setView('wallet')} className={`px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'wallet' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><WalletIcon className="w-4 h-4" /> Wallet</button>
+                    <button onClick={() => setView('market')} className={`px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'market' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><ShoppingCartIcon className="w-4 h-4" /> Marketplace</button>
+                </nav>
+            </div>
+            
+            {view === 'profile' && (
+                <>
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Avatar (Emoji/Char)</label>
+                        <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Bio</label>
+                        <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div className="border-t border-white/10 my-4"></div>
+                    <div>
+                        <h3 className="text-lg font-semibold mb-3 text-slate-300">Verification</h3>
+                        {(() => {
+                            const verification = currentUser.verification;
+                            const isExpired = verification?.expiresAt && verification.expiresAt < Date.now();
+
+                            switch (verification?.status) {
+                                case 'approved':
+                                    if (isExpired) return <p className="text-sm text-center text-slate-400 bg-slate-500/10 p-3 rounded-lg">Your verification has expired.</p>;
+                                    return <div className="text-sm text-center text-blue-300 flex flex-col items-center justify-center gap-2 bg-blue-500/10 p-3 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            {renderUserBadge(currentUser)}
+                                            <span>You are verified with a {verification.badgeType || 'blue'} badge.</span>
+                                        </div>
+                                        <span className="text-xs text-slate-400">{verification.expiresAt ? `Expires on ${new Date(verification.expiresAt).toLocaleDateString()}` : "This badge is permanent."}</span>
+                                    </div>;
+                                case 'pending':
+                                    return <p className="text-sm text-center text-amber-300 bg-amber-500/10 p-3 rounded-lg">Your verification request is pending.</p>;
+                                default:
+                                    return <button onClick={handleRequest} disabled={isSubmitting} className="w-full px-5 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">{isSubmitting ? 'Submitting...' : 'Request Verification'}</button>;
+                            }
+                        })()}
+                    </div>
+                </div>
+                <div className="mt-6 flex justify-end gap-3">
+                    <button onClick={onClose} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
+                    <button onClick={handleUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
+                </div>
+                </>
+            )}
+            {view === 'wallet' && (
+                <>
+                <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 p-4 rounded-xl mb-4 text-center">
+                    <p className="text-sm text-slate-300">Current Balance</p>
+                    <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentUser.walletBalance)}</p>
+                </div>
+                <form onSubmit={handleTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
+                    <h3 className="font-semibold text-lg text-white">Send Funds</h3>
+                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                        <option value="">Select a user...</option>
+                        {connectedUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                    </select>
+                    <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
+                    <button type="submit" disabled={isSubmitting} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                        {isSubmitting ? 'Sending...' : 'Send'}
+                    </button>
+                </form>
+                 <div className="mt-4">
+                    <h3 className="font-semibold text-lg mb-2 text-white">Transaction History</h3>
+                    <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-2 -mr-2">
+                        {userTransactions.length > 0 ? userTransactions.map(t => {
+                            const isOutgoing = t.fromUserId === currentUser.id;
+                            const otherUserId = isOutgoing ? t.toUserId : t.fromUserId;
+                            const otherUser = users.find(u => u.id === otherUserId);
+                            return (
+                                <div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center">
+                                    <div>
+                                        <p className="font-semibold">{t.description}</p>
+                                        <p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p>
+                                    </div>
+                                    <p className={`font-bold ${isOutgoing ? 'text-red-400' : 'text-green-400'}`}>{isOutgoing ? '-' : '+'}{formatCurrency(t.amount)}</p>
+                                </div>
+                            )
+                        }) : <p className="text-sm text-center text-slate-500 p-4">No transactions yet.</p>}
+                    </div>
+                 </div>
+                </>
+            )}
+            {view === 'market' && (
+                <div className="space-y-4 max-h-96 overflow-y-auto custom-scrollbar pr-2 -mr-2">
+                    {Object.entries(badgePrices).map(([badge, prices]) => (
+                        <div key={badge} className="bg-black/20 p-4 rounded-xl border border-white/10">
+                            <div className="flex items-center gap-2 mb-3">
+                                <CheckBadgeIcon className={`w-6 h-6 ${badge === 'blue' ? 'text-blue-400' : badge === 'red' ? 'text-red-400' : badge === 'gold' ? 'text-amber-400' : 'text-pink-400'}`} />
+                                <h3 className="font-bold text-xl capitalize text-white">{badge} Badge</h3>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-center text-sm">
+                                {Object.entries(prices).map(([duration, cost]) => (
+                                    <button 
+                                        key={duration}
+                                        onClick={() => handlePurchase(badge as VerificationBadgeType, duration as any, cost)}
+                                        disabled={isSubmitting || currentUser.walletBalance < cost}
+                                        className="p-2 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <p className="font-semibold capitalize">{duration === 'permanent' ? 'Permanent' : `${duration} Days`}</p>
+                                        <p className="font-bold text-cyan-300">{formatCurrency(cost)}</p>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </Modal>
+    );
+};
+
+const TransferModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    recipient: User;
+    onTransfer: (amount: number) => Promise<{success: boolean, message: string}>;
+}> = ({ isOpen, onClose, recipient, onTransfer }) => {
+    const [amount, setAmount] = useState('');
+    const [message, setMessage] = useState({ type: '', text: '' });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const numAmount = parseFloat(amount);
+        if (!numAmount || numAmount <= 0) {
+            setMessage({ type: 'error', text: 'Please enter a valid amount.' });
+            return;
+        }
+        setIsSubmitting(true);
+        setMessage({ type: '', text: '' });
+        const result = await onTransfer(numAmount);
+        if (result.success) {
+            setMessage({ type: 'success', text: result.message });
+            setAmount('');
+            setTimeout(onClose, 1500); // Close after success
+        } else {
+            setMessage({ type: 'error', text: result.message });
+        }
+        setIsSubmitting(false);
+    };
 
     return (
         <Modal isOpen={isOpen} onClose={onClose}>
-             <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-white">Profile & Settings</h2>
-                <button onClick={onClose} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10 transition-colors"><XMarkIcon /></button>
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-2xl font-bold text-white">Send Money</h2>
+                <button onClick={onClose} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10"><XMarkIcon /></button>
             </div>
-            <div className="space-y-4">
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Avatar (Emoji/Char)</label>
-                    <input type="text" value={avatar} onChange={e => setAvatar(e.target.value)} maxLength={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            <p className="text-center text-slate-300 mb-4">You are sending money to <strong className="text-white">{recipient.username}</strong>.</p>
+            <form onSubmit={handleSubmit} className="space-y-3">
+                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                {message.text && <p className={`text-sm text-center ${message.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{message.text}</p>}
+                <div className="flex justify-end gap-3 pt-2">
+                    <button type="button" onClick={onClose} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button>
+                    <button type="submit" disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                        {isSubmitting ? 'Sending...' : 'Confirm Transfer'}
+                    </button>
                 </div>
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">Bio</label>
-                    <textarea value={bio} onChange={e => setBio(e.target.value)} rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                </div>
-                 <div className="border-t border-white/10 my-4"></div>
-                <div>
-                    <h3 className="text-lg font-semibold mb-3 text-slate-300">Verification</h3>
-                    {renderVerificationStatus()}
-                </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-                <button onClick={onClose} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
-                <button onClick={handleUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">
-                    {isSubmitting ? 'Saving...' : 'Save Changes'}
-                </button>
-            </div>
+            </form>
         </Modal>
     );
 };
@@ -188,10 +383,7 @@ const AddAccountModal: React.FC<{
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!username || !password) {
-            setError("Please enter username and password.");
-            return;
-        }
+        if (!username || !password) { setError("Please enter username and password."); return; }
         setIsSubmitting(true);
         setError('');
         const authenticatedUser = await db.authenticate(username, password);
@@ -227,7 +419,7 @@ const AddAccountModal: React.FC<{
 
 // --- Main Component ---
 const ChatRoom: React.FC<ChatRoomProps> = (props) => {
-  const { currentUser, users, chats, messages, connections, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile } = props;
+  const { currentUser, users, chats, messages, connections, transactions, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile, onTransferFunds, onPurchaseVerification } = props;
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [messageInput, setMessageInput] = useState('');
@@ -238,23 +430,19 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   const accountSwitcherRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
-  // Group Creation Modal State
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isSubmittingGroup, setIsSubmittingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [unlockedGroupIds, setUnlockedGroupIds] = useState<Set<string>>(new Set());
   
-  // Account & Notification Switcher State
   const [isAccountSwitcherOpen, setIsAccountSwitcherOpen] = useState(false);
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
-  const incomingRequests = useMemo(() => {
-      return connections.filter(c => c.toUserId === currentUser.id && c.status === ConnectionStatus.PENDING);
-  }, [connections, currentUser.id]);
-
+  const incomingRequests = useMemo(() => connections.filter(c => c.toUserId === currentUser.id && c.status === ConnectionStatus.PENDING), [connections, currentUser.id]);
   const activeChat = useMemo(() => chats.find(c => c.id === activeChatId), [activeChatId, chats]);
   const activeChatMessages = useMemo(() => messages.filter(m => m.chatId === activeChatId).sort((a,b) => a.timestamp - b.timestamp), [activeChatId, messages]);
   const otherUserInDM = useMemo(() => {
@@ -265,53 +453,29 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     return null;
   }, [activeChat, currentUser.id, users]);
 
-  // Scroll to bottom of messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeChatMessages, isOtherUserTyping]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [activeChatMessages, isOtherUserTyping]);
+  useEffect(() => { setIsOtherUserTyping(false); }, [activeChatId]);
   
-  // Reset typing indicator when chat changes
-  useEffect(() => {
-    setIsOtherUserTyping(false);
-  }, [activeChatId]);
-  
-  // Click outside handler for dropdowns
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-        if (accountSwitcherRef.current && !accountSwitcherRef.current.contains(event.target as Node)) {
-            setIsAccountSwitcherOpen(false);
-        }
-        if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
-            setIsNotificationsOpen(false);
-        }
+        if (accountSwitcherRef.current && !accountSwitcherRef.current.contains(event.target as Node)) setIsAccountSwitcherOpen(false);
+        if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) setIsNotificationsOpen(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-        document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Listen for typing events
   useEffect(() => {
     const handleTyping = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { userId, chatId } = customEvent.detail;
-        if (chatId === activeChatId && userId === otherUserInDM?.id) {
-            setIsOtherUserTyping(true);
-        }
+        const { userId, chatId } = (event as CustomEvent).detail;
+        if (chatId === activeChatId && userId === otherUserInDM?.id) setIsOtherUserTyping(true);
     };
-
     const handleStoppedTyping = (event: Event) => {
-        const customEvent = event as CustomEvent;
-        const { userId, chatId } = customEvent.detail;
-        if (chatId === activeChatId && userId === otherUserInDM?.id) {
-            setIsOtherUserTyping(false);
-        }
+        const { userId, chatId } = (event as CustomEvent).detail;
+        if (chatId === activeChatId && userId === otherUserInDM?.id) setIsOtherUserTyping(false);
     };
-
     window.addEventListener('user-typing', handleTyping);
     window.addEventListener('user-stopped-typing', handleStoppedTyping);
-
     return () => {
         window.removeEventListener('user-typing', handleTyping);
         window.removeEventListener('user-stopped-typing', handleStoppedTyping);
@@ -321,21 +485,12 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
 
   const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setMessageInput(e.target.value);
-    
-    if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-    }
-    
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     if (activeChat?.type === ChatType.DM) {
-        window.dispatchEvent(new CustomEvent('user-typing', {
-            detail: { userId: currentUser.id, chatId: activeChatId }
-        }));
-    
+        window.dispatchEvent(new CustomEvent('user-typing', { detail: { userId: currentUser.id, chatId: activeChatId } }));
         typingTimeoutRef.current = window.setTimeout(() => {
-            window.dispatchEvent(new CustomEvent('user-stopped-typing', {
-                detail: { userId: currentUser.id, chatId: activeChatId }
-            }));
-        }, 2000); // 2 seconds of inactivity
+            window.dispatchEvent(new CustomEvent('user-stopped-typing', { detail: { userId: currentUser.id, chatId: activeChatId } }));
+        }, 2000);
     }
   };
 
@@ -346,13 +501,8 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
       await onSendMessage(activeChatId, messageInput.trim());
       setMessageInput('');
       setIsSending(false);
-      
-      if (typingTimeoutRef.current) {
-          clearTimeout(typingTimeoutRef.current);
-      }
-      window.dispatchEvent(new CustomEvent('user-stopped-typing', {
-          detail: { userId: currentUser.id, chatId: activeChatId }
-      }));
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      window.dispatchEvent(new CustomEvent('user-stopped-typing', { detail: { userId: currentUser.id, chatId: activeChatId } }));
     }
   };
   
@@ -369,9 +519,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     const chat = chats.find(c => c.id === chatId);
     if (chat?.password && !unlockedGroupIds.has(chatId)) {
         const enteredPassword = prompt(`This group is password protected. Please enter the password for "${getChatDisplayName(chat, currentUser, users)}":`);
-        if (enteredPassword === null) { // User cancelled prompt
-            return;
-        }
+        if (enteredPassword === null) return;
         if (enteredPassword === chat.password) {
             setUnlockedGroupIds(prev => new Set(prev).add(chatId));
             setActiveChatId(chatId);
@@ -386,28 +534,16 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   const handleCreateGroup = async () => {
     if (!newGroupName.trim() || selectedUserIds.length === 0) return;
     setIsSubmittingGroup(true);
-    const newChat = await onCreateGroupChat({
-        memberIds: selectedUserIds,
-        groupName: newGroupName.trim(),
-    });
-    // Reset state and close modal
+    const newChat = await onCreateGroupChat({ memberIds: selectedUserIds, groupName: newGroupName.trim() });
     setIsCreatingGroup(false);
     setNewGroupName('');
     setSelectedUserIds([]);
     setIsSubmittingGroup(false);
-    // Switch to the new chat
     setActiveChatId(newChat.id);
   };
   
-  const handleOpenAddAccount = () => {
-    setIsAccountSwitcherOpen(false);
-    setIsAddAccountModalOpen(true);
-  };
-
-  const handleOpenProfileSettings = () => {
-    setIsAccountSwitcherOpen(false);
-    setIsProfileModalOpen(true);
-  };
+  const handleOpenAddAccount = () => { setIsAccountSwitcherOpen(false); setIsAddAccountModalOpen(true); };
+  const handleOpenProfileModal = () => { setIsAccountSwitcherOpen(false); setIsProfileModalOpen(true); };
   
   const handleSwitchAccount = async (userId: string) => {
     if (userId === currentUser.id) return;
@@ -415,11 +551,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     await onSwitchUser(userId);
   };
 
-  const toggleUserSelection = (userId: string) => {
-    setSelectedUserIds(prev =>
-        prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
-    );
-  };
+  const toggleUserSelection = (userId: string) => setSelectedUserIds(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
   
   const handleBlockUser = () => {
       if (!otherUserInDM) return;
@@ -443,12 +575,10 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         .filter(c => c.status === ConnectionStatus.ACCEPTED && (c.fromUserId === currentUser.id || c.toUserId === currentUser.id))
         .flatMap(c => [c.fromUserId, c.toUserId])
     );
-
     const announcementChat = chats.find(c => c.id === 'chat-announcements-global' && c.members.includes(currentUser.id));
-
     const otherChats = chats
       .filter(chat => {
-          if (chat.id === 'chat-announcements-global') return false; // Exclude announcement chat from this filter
+          if (chat.id === 'chat-announcements-global') return false;
           if (chat.type === ChatType.GROUP) return chat.members.includes(currentUser.id);
           const otherUserId = chat.members.find(id => id !== currentUser.id);
           return otherUserId && acceptedUserIds.has(otherUserId);
@@ -458,7 +588,6 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         const lastMessageB = messages.filter(m => m.chatId === b.id).sort((x, y) => y.timestamp - x.timestamp)[0];
         return (lastMessageB?.timestamp || 0) - (lastMessageA?.timestamp || 0);
       });
-      
       return announcementChat ? [announcementChat, ...otherChats] : otherChats;
   }, [chats, messages, currentUser.id, connections]);
 
@@ -468,23 +597,14 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
   const renderSearchUserActions = (user: User) => {
     const connection = connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === user.id) || (c.fromUserId === user.id && c.toUserId === currentUser.id));
     const baseButtonClasses = "ml-auto text-white text-xs px-3 py-1 rounded-full font-semibold transition-all duration-200 hover:shadow-lg";
-
-    if (!connection) {
-        return <button onClick={() => onSendRequest(user.id)} className={`${baseButtonClasses} bg-cyan-500 hover:bg-cyan-400 hover:shadow-cyan-500/30`}>Send Request</button>
-    }
-
+    if (!connection) return <button onClick={() => onSendRequest(user.id)} className={`${baseButtonClasses} bg-cyan-500 hover:bg-cyan-400 hover:shadow-cyan-500/30`}>Send Request</button>
     switch(connection.status) {
-        case ConnectionStatus.PENDING:
-            return <span className="ml-auto text-xs text-slate-400">Request Sent</span>
-        case ConnectionStatus.ACCEPTED:
-            return <button onClick={() => handleUserSearchClick(user)} className={`${baseButtonClasses} bg-blue-500 hover:bg-blue-400 hover:shadow-blue-500/30`}>Message</button>
-        case ConnectionStatus.BLOCKED:
-            return <span className="ml-auto text-xs text-red-400">Blocked</span>
-        default:
-             return <button onClick={() => onSendRequest(user.id)} className={`${baseButtonClasses} bg-cyan-500 hover:bg-cyan-400 hover:shadow-cyan-500/30`}>Send Request</button>
+        case ConnectionStatus.PENDING: return <span className="ml-auto text-xs text-slate-400">Request Sent</span>
+        case ConnectionStatus.ACCEPTED: return <button onClick={() => handleUserSearchClick(user)} className={`${baseButtonClasses} bg-blue-500 hover:bg-blue-400 hover:shadow-blue-500/30`}>Message</button>
+        case ConnectionStatus.BLOCKED: return <span className="ml-auto text-xs text-red-400">Blocked</span>
+        default: return <button onClick={() => onSendRequest(user.id)} className={`${baseButtonClasses} bg-cyan-500 hover:bg-cyan-400 hover:shadow-cyan-500/30`}>Send Request</button>
     }
   }
-
 
   return (
     <>
@@ -493,50 +613,29 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 <h2 className="text-2xl font-bold text-white">Create New Group</h2>
                 <button onClick={() => setIsCreatingGroup(false)} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10 transition-colors"><XMarkIcon /></button>
             </div>
-
-            <input
-                type="text"
-                placeholder="Group Name"
-                value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 mb-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-            />
-
+            <input type="text" placeholder="Group Name" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 mb-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
             <h3 className="text-lg font-semibold mt-2 mb-3 text-slate-300">Select Members</h3>
             <div className="flex-grow overflow-y-auto custom-scrollbar max-h-60 pr-2 -mr-2 space-y-2">
                 {users.filter(u => u.id !== currentUser.id && !u.isAdmin).map(user => (
                     <div key={user.id} onClick={() => toggleUserSelection(user.id)} className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${selectedUserIds.includes(user.id) ? 'bg-cyan-500/30' : 'hover:bg-white/5'}`}>
-                        <div className="relative flex-shrink-0">
-                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{user.avatar}</div>
-                            <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-900/50 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
-                        </div>
+                        <div className="relative flex-shrink-0"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{user.avatar}</div><span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-900/50 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span></div>
                         <span className="font-semibold truncate flex-grow">{user.username}</span>
-                        <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all ${selectedUserIds.includes(user.id) ? 'bg-cyan-500 border-cyan-400' : 'border-slate-500 bg-white/10'}`}>
-                            {selectedUserIds.includes(user.id) && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}
-                        </div>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all ${selectedUserIds.includes(user.id) ? 'bg-cyan-500 border-cyan-400' : 'border-slate-500 bg-white/10'}`}> {selectedUserIds.includes(user.id) && <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>}</div>
                     </div>
                 ))}
             </div>
-            
             <div className="mt-8 flex justify-end gap-4">
                 <button onClick={() => setIsCreatingGroup(false)} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg transition-colors font-semibold">Cancel</button>
-                <button
-                    onClick={handleCreateGroup}
-                    disabled={!newGroupName.trim() || selectedUserIds.length === 0 || isSubmittingGroup}
-                    className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg transition-colors font-semibold disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed"
-                >
-                    {isSubmittingGroup ? 'Creating...' : 'Create Group'}
-                </button>
+                <button onClick={handleCreateGroup} disabled={!newGroupName.trim() || selectedUserIds.length === 0 || isSubmittingGroup} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg transition-colors font-semibold disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed">{isSubmittingGroup ? 'Creating...' : 'Create Group'}</button>
             </div>
         </Modal>
 
       <AddAccountModal isOpen={isAddAccountModalOpen} onClose={() => setIsAddAccountModalOpen(false)} onLoginSuccess={onLogin} />
-      <ProfileSettingsModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} currentUser={currentUser} onUpdateProfile={onUpdateUserProfile} onRequestVerification={onRequestVerification} />
-      
+      <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} currentUser={currentUser} users={users} connections={connections} transactions={transactions} onUpdateProfile={onUpdateUserProfile} onRequestVerification={onRequestVerification} onTransferFunds={onTransferFunds} onPurchaseVerification={onPurchaseVerification} />
+      {otherUserInDM && <TransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} recipient={otherUserInDM} onTransfer={(amount) => onTransferFunds(otherUserInDM.id, amount)} />}
+
       <div className="h-screen flex bg-black/20">
-      {/* Sidebar - Chat List */}
       <aside className={`w-full md:w-1/3 lg:w-1/4 xl:w-1/5 flex flex-col bg-black/10 backdrop-blur-2xl border-r border-white/10 transition-transform duration-300 ease-in-out ${showChatList ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:flex`}>
-        {/* Sidebar Header */}
         <header className="p-4 border-b border-white/10 flex justify-between items-center flex-shrink-0">
           <div className="relative flex-grow" ref={accountSwitcherRef}>
             <button onClick={() => setIsAccountSwitcherOpen(p => !p)} className="flex items-center gap-3 overflow-hidden w-full text-left p-2 -m-2 rounded-lg hover:bg-white/5 transition-colors">
@@ -545,11 +644,8 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-black/30 ${currentUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
               </div>
               <div className="flex-grow overflow-hidden">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-semibold text-lg truncate block">{currentUser.username}</span>
-                    {renderUserBadge(currentUser, 'large')}
-                  </div>
-                  {currentUser.bio && <span className="text-xs text-slate-400 truncate block">{currentUser.bio}</span>}
+                  <div className="flex items-center gap-1.5"><span className="font-semibold text-lg truncate block">{currentUser.username}</span>{renderUserBadge(currentUser, 'large')}</div>
+                  <p className="text-xs text-slate-400 font-mono tracking-tighter">{formatCurrency(currentUser.walletBalance)}</p>
               </div>
               <ChevronDownIcon className={`w-5 h-5 text-slate-400 flex-shrink-0 transition-transform ${isAccountSwitcherOpen ? 'rotate-180' : ''}`} />
             </button>
@@ -558,22 +654,13 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                     {loggedInUsers.map(user => (
                         <button key={user.id} onClick={() => handleSwitchAccount(user.id)} className="w-full flex items-center gap-3 p-2 rounded-md text-left hover:bg-cyan-500/20 transition-colors">
                             <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-base font-bold flex-shrink-0">{user.avatar}</div>
-                             <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
-                                <span className="font-semibold truncate">{user.username}</span>
-                                {renderUserBadge(user)}
-                            </div>
+                             <div className="flex-grow flex items-center gap-1.5 overflow-hidden"><span className="font-semibold truncate">{user.username}</span>{renderUserBadge(user)}</div>
                             {user.id === currentUser.id && <CheckCircleIcon className="w-6 h-6 text-cyan-400 flex-shrink-0" />}
                         </button>
                     ))}
                     <div className="border-t border-white/10 my-1 !mt-2 !mb-2"></div>
-                     <button onClick={handleOpenProfileSettings} className="w-full flex items-center gap-3 p-2 rounded-md text-left text-slate-300 hover:bg-white/10 transition-colors">
-                        <PencilIcon className="w-8 h-8 p-1.5 flex-shrink-0" />
-                        <span className="font-semibold">Profile & Settings</span>
-                    </button>
-                    <button onClick={handleOpenAddAccount} className="w-full flex items-center gap-3 p-2 rounded-md text-left text-slate-300 hover:bg-white/10 transition-colors">
-                        <UserPlusIcon className="w-8 h-8 p-1 flex-shrink-0" />
-                        <span className="font-semibold">Add Account</span>
-                    </button>
+                     <button onClick={handleOpenProfileModal} className="w-full flex items-center gap-3 p-2 rounded-md text-left text-slate-300 hover:bg-white/10 transition-colors"><UserCircleIcon className="w-8 h-8 p-1.5 flex-shrink-0" /> <span className="font-semibold">My Account</span></button>
+                    <button onClick={handleOpenAddAccount} className="w-full flex items-center gap-3 p-2 rounded-md text-left text-slate-300 hover:bg-white/10 transition-colors"><UserPlusIcon className="w-8 h-8 p-1 flex-shrink-0" /><span className="font-semibold">Add Account</span></button>
                 </div>
             )}
           </div>
@@ -608,171 +695,54 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                       </div>
                   )}
               </div>
-              <button onClick={() => setIsCreatingGroup(true)} title="Create Group" className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
-                  <PlusCircleIcon className="w-6 h-6" />
-              </button>
-              <button onClick={onLogout} title="Logout All Accounts" className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors">
-                <ArrowLeftOnRectangleIcon className="w-6 h-6" />
-              </button>
+              <button onClick={() => setIsCreatingGroup(true)} title="Create Group" className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"><PlusCircleIcon className="w-6 h-6" /></button>
+              <button onClick={onLogout} title="Logout All Accounts" className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"><ArrowLeftOnRectangleIcon className="w-6 h-6" /></button>
           </div>
         </header>
         
-        {/* Search Bar */}
         <div className="p-4 flex-shrink-0 relative">
           <MagnifyingGlassIcon className="w-5 h-5 text-slate-400 absolute left-8 top-1/2 -translate-y-1/2"/>
-          <input
-            type="text"
-            placeholder="Search or start new chat"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-black/20 border border-white/10 rounded-full py-2.5 pl-11 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors"
-          />
-          {searchQuery && (
-            <div className="absolute top-full left-0 right-0 mt-2 p-2 bg-slate-900/50 backdrop-blur-xl rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto custom-scrollbar">
-                {filteredUsers.length > 0 ? (
-                    filteredUsers.map(user => (
-                        <div key={user.id} className="flex items-center gap-3 p-2 rounded-lg">
-                             <div className="relative flex-shrink-0">
-                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{user.avatar}</div>
-                                <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-900/50 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
-                            </div>
-                            <div className="flex-grow flex items-center gap-1.5 overflow-hidden">
-                                <span className="font-semibold truncate">{user.username}</span>
-                                {renderUserBadge(user)}
-                            </div>
-                             {renderSearchUserActions(user)}
-                        </div>
-                    ))
-                ) : <div className="p-2 text-center text-slate-400">No users found.</div>}
-            </div>
-          )}
+          <input type="text" placeholder="Search or start new chat" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-full py-2.5 pl-11 pr-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-colors" />
+          {searchQuery && (<div className="absolute top-full left-0 right-0 mt-2 p-2 bg-slate-900/50 backdrop-blur-xl rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto custom-scrollbar">{filteredUsers.length > 0 ? (filteredUsers.map(user => (<div key={user.id} className="flex items-center gap-3 p-2 rounded-lg"><div className="relative flex-shrink-0"><div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{user.avatar}</div><span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-slate-900/50 ${user.online ? 'bg-green-400' : 'bg-slate-500'}`}></span></div><div className="flex-grow flex items-center gap-1.5 overflow-hidden"><span className="font-semibold truncate">{user.username}</span>{renderUserBadge(user)}</div>{renderSearchUserActions(user)}</div>))) : <div className="p-2 text-center text-slate-400">No users found.</div>}</div>)}
         </div>
 
-        {/* Chat List */}
         <div className="flex-grow overflow-y-auto custom-scrollbar">
-          {sortedChats.length > 0 ? (
-            sortedChats.map(chat => {
-              const lastMessage = messages.filter(m => m.chatId === chat.id).sort((a,b) => b.timestamp - a.timestamp)[0];
-              const otherUser = chat.type === ChatType.DM ? users.find(u => u.id === chat.members.find(id => id !== currentUser.id)) : null;
-
-              return (
-                <div
-                  key={chat.id}
-                  onClick={() => handleSelectChat(chat.id)}
-                  className={`flex items-center gap-4 p-4 mx-2 rounded-xl cursor-pointer transition-colors duration-200 relative ${activeChatId === chat.id ? 'bg-white/10' : 'hover:bg-white/5'}`}
-                >
-                  {activeChatId === chat.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 bg-cyan-400 rounded-r-full"></div>}
-                  <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold">
-                        {chat.id === 'chat-announcements-global' ? '📢' : (chat.type === ChatType.GROUP ? <UsersIcon className="w-7 h-7" /> : (otherUser ? otherUser.avatar : <UserCircleIcon className="w-7 h-7"/>)) }
-                    </div>
-                    {otherUser && (
-                        <span className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full ring-2 ring-black/30 ${otherUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
-                    )}
-                  </div>
-                  <div className="flex-grow overflow-hidden">
-                    <div className="flex items-center gap-2">
-                        <h3 className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</h3>
-                        {otherUser && renderUserBadge(otherUser)}
-                        {chat.password && <LockClosedIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />}
-                    </div>
-                    <p className="text-sm text-slate-400 truncate">{lastMessage?.text || 'No messages yet'}</p>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="p-6 text-center text-slate-400">
-                <p>No chats yet.</p>
-                <p className="text-sm">Connect with users to start a conversation.</p>
-            </div>
-          )}
+          {sortedChats.length > 0 ? ( sortedChats.map(chat => { const lastMessage = messages.filter(m => m.chatId === chat.id).sort((a,b) => b.timestamp - a.timestamp)[0]; const otherUser = chat.type === ChatType.DM ? users.find(u => u.id === chat.members.find(id => id !== currentUser.id)) : null; return (<div key={chat.id} onClick={() => handleSelectChat(chat.id)} className={`flex items-center gap-4 p-4 mx-2 rounded-xl cursor-pointer transition-colors duration-200 relative ${activeChatId === chat.id ? 'bg-white/10' : 'hover:bg-white/5'}`}>{activeChatId === chat.id && <div className="absolute left-0 top-1/2 -translate-y-1/2 h-8 w-1 bg-cyan-400 rounded-r-full"></div>}<div className="relative flex-shrink-0"><div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-2xl font-bold">{chat.id === 'chat-announcements-global' ? '📢' : (chat.type === ChatType.GROUP ? <UsersIcon className="w-7 h-7" /> : (otherUser ? otherUser.avatar : <UserCircleIcon className="w-7 h-7"/>)) }</div>{otherUser && (<span className={`absolute bottom-0 right-0 block h-3.5 w-3.5 rounded-full ring-2 ring-black/30 ${otherUser.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>)}</div><div className="flex-grow overflow-hidden"><div className="flex items-center gap-2"><h3 className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</h3>{otherUser && renderUserBadge(otherUser)}{chat.password && <LockClosedIcon className="w-4 h-4 text-slate-500 flex-shrink-0" />}</div><p className="text-sm text-slate-400 truncate">{lastMessage?.text || 'No messages yet'}</p></div></div>);})) : (<div className="p-6 text-center text-slate-400"><p>No chats yet.</p><p className="text-sm">Connect with users to start a conversation.</p></div>)}
         </div>
       </aside>
 
-      {/* Chat Window */}
       <main className={`flex-1 flex flex-col bg-black/30 absolute top-0 left-0 w-full h-full transition-transform duration-300 ease-in-out md:static md:flex ${showChatWindow ? 'translate-x-0' : 'translate-x-full'} md:translate-x-0`}>
         {activeChat ? (
           <>
-            {/* Chat Header */}
             <header className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0 bg-black/10 backdrop-blur-2xl z-10">
-                <button onClick={() => setActiveChatId(null)} className="md:hidden p-2 text-slate-400 hover:text-white">
-                    <ArrowLeftIcon className="w-6 h-6" />
-                </button>
+                <button onClick={() => setActiveChatId(null)} className="md:hidden p-2 text-slate-400 hover:text-white"><ArrowLeftIcon className="w-6 h-6" /></button>
                <div className="relative flex-shrink-0">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">
-                        {activeChat.id === 'chat-announcements-global' ? '📢' : (activeChat.type === ChatType.GROUP ? <UsersIcon className="w-6 h-6" /> : (otherUserInDM ? otherUserInDM.avatar : <UserCircleIcon className="w-6 h-6"/>))}
-                    </div>
-                    {otherUserInDM && (
-                        <span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-black/30 ${otherUserInDM.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>
-                    )}
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold">{activeChat.id === 'chat-announcements-global' ? '📢' : (activeChat.type === ChatType.GROUP ? <UsersIcon className="w-6 h-6" /> : (otherUserInDM ? otherUserInDM.avatar : <UserCircleIcon className="w-6 h-6"/>))}</div>
+                    {otherUserInDM && (<span className={`absolute bottom-0 right-0 block h-3 w-3 rounded-full ring-2 ring-black/30 ${otherUserInDM.online ? 'bg-green-400' : 'bg-slate-500'}`}></span>)}
                 </div>
                 <div className='flex-grow overflow-hidden'>
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold truncate">{getChatDisplayName(activeChat, currentUser, users)}</h2>
-                        {otherUserInDM && renderUserBadge(otherUserInDM, 'large')}
-                        {otherUserInDM?.instagramUsername && (
-                            <a 
-                                href={`https://instagram.com/${otherUserInDM.instagramUsername}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                title={`Visit ${otherUserInDM.username}'s Instagram`}
-                                className="text-slate-400 hover:text-white transition-colors flex-shrink-0"
-                            >
-                                <InstagramIcon className="w-5 h-5"/>
-                            </a>
-                        )}
-                    </div>
+                    <div className="flex items-center gap-2"><h2 className="text-xl font-bold truncate">{getChatDisplayName(activeChat, currentUser, users)}</h2>{otherUserInDM && renderUserBadge(otherUserInDM, 'large')}{otherUserInDM?.instagramUsername && (<a href={`https://instagram.com/${otherUserInDM.instagramUsername}`} target="_blank" rel="noopener noreferrer" title={`Visit ${otherUserInDM.username}'s Instagram`} className="text-slate-400 hover:text-white transition-colors flex-shrink-0"><InstagramIcon className="w-5 h-5"/></a>)}</div>
                     {otherUserInDM?.bio && <p className="text-xs text-slate-400 truncate">{otherUserInDM.bio}</p>}
                     {activeChat.id === 'chat-announcements-global' && <p className="text-xs text-slate-400">Important messages from the administrator.</p>}
                 </div>
                  {otherUserInDM && (
-                    <button onClick={handleBlockUser} title={`Block ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors ml-auto">
-                        <BanIcon className="w-6 h-6" />
-                    </button>
+                    <div className="flex items-center gap-2 ml-auto">
+                        <button onClick={() => setIsTransferModalOpen(true)} title={`Send money to ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-green-400 hover:bg-white/10 rounded-full transition-colors"><CurrencyDollarIcon className="w-6 h-6" /></button>
+                        <button onClick={handleBlockUser} title={`Block ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors"><BanIcon className="w-6 h-6" /></button>
+                    </div>
                  )}
             </header>
             
-            {/* Messages */}
             <div className="flex-grow p-6 overflow-y-auto space-y-6 custom-scrollbar">
-              {activeChatMessages.map(msg => {
-                const author = users.find(u => u.id === msg.authorId);
-                if (!author) return null;
-                return <ChatMessage key={msg.id} message={msg} author={author} isCurrentUser={msg.authorId === currentUser.id} isGroupChat={activeChat.type === ChatType.GROUP} />;
-              })}
-              
-              {isOtherUserTyping && (
-                 <div className="flex items-end gap-3 justify-start">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">
-                        {otherUserInDM?.avatar}
-                    </div>
-                    <div className="px-4 py-2.5 bg-white/10 rounded-r-2xl rounded-tl-2xl">
-                        <div className="flex items-center gap-1.5">
-                            <span className="h-2 w-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                            <span className="h-2 w-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                            <span className="h-2 w-2 bg-slate-400 rounded-full animate-bounce"></span>
-                        </div>
-                    </div>
-                </div>
-              )}
-
+              {activeChatMessages.map(msg => { const author = users.find(u => u.id === msg.authorId); if (!author) return null; return <ChatMessage key={msg.id} message={msg} author={author} isCurrentUser={msg.authorId === currentUser.id} isGroupChat={activeChat.type === ChatType.GROUP} />; })}
+              {isOtherUserTyping && (<div className="flex items-end gap-3 justify-start"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-sm font-bold flex-shrink-0">{otherUserInDM?.avatar}</div><div className="px-4 py-2.5 bg-white/10 rounded-r-2xl rounded-tl-2xl"><div className="flex items-center gap-1.5"><span className="h-2 w-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span><span className="h-2 w-2 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span><span className="h-2 w-2 bg-slate-400 rounded-full animate-bounce"></span></div></div></div>)}
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Message Input */}
             <footer className="p-4 flex-shrink-0 bg-black/10 backdrop-blur-2xl border-t border-white/10">
               <form onSubmit={handleSendMessage} className="relative">
-                 <input
-                  type="text"
-                  value={messageInput}
-                  onChange={handleMessageInputChange}
-                  placeholder="Type a message..."
-                  className="w-full bg-black/20 border border-white/10 rounded-full py-3 pl-5 pr-16 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-shadow"
-                  disabled={isSending || activeChat.id === 'chat-announcements-global'}
-                />
-                <button type="submit" disabled={!messageInput.trim() || isSending || activeChat.id === 'chat-announcements-global'} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed transition-all active:scale-100">
-                  <PaperAirplaneIcon className="w-5 h-5" />
-                </button>
+                 <input type="text" value={messageInput} onChange={handleMessageInputChange} placeholder="Type a message..." className="w-full bg-black/20 border border-white/10 rounded-full py-3 pl-5 pr-16 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-shadow" disabled={isSending || activeChat.id === 'chat-announcements-global'} />
+                <button type="submit" disabled={!messageInput.trim() || isSending || activeChat.id === 'chat-announcements-global'} className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 text-white hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:cursor-not-allowed transition-all active:scale-100"><PaperAirplaneIcon className="w-5 h-5" /></button>
               </form>
             </footer>
           </>

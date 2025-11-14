@@ -174,3 +174,23 @@ export const ClockIcon: React.FC<{ className?: string }> = ({ className = "w-6 h
         <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25zM12.75 6a.75.75 0 00-1.5 0v6c0 .414.336.75.75.75h4.5a.75.75 0 000-1.5h-3.75V6z" clipRule="evenodd" />
     </svg>
 );
+
+export const WalletIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path d="M18 9.75a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0v-6a.75.75 0 01.75-.75z" />
+        <path fillRule="evenodd" d="M20.25 5.25A2.25 2.25 0 0018 3H6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 006 21h12a2.25 2.25 0 002.25-2.25V5.25zm-3.75 2.25a.75.75 0 00-1.5 0v6a.75.75 0 001.5 0v-6zM12 7.5a.75.75 0 01.75.75v6a.75.75 0 01-1.5 0v-6a.75.75 0 01.75-.75zM8.25 7.5a.75.75 0 00-1.5 0v6a.75.75 0 001.5 0v-6z" clipRule="evenodd" />
+    </svg>
+);
+
+export const ShoppingCartIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M2.25 2.25a.75.75 0 000 1.5h1.386c.17 0 .318.114.362.278l2.558 9.592a3.752 3.752 0 00-2.806 3.63c0 2.14 1.73 3.87 3.87 3.87 2.14 0 3.87-1.73 3.87-3.87 0-.613-.143-1.19-.4-1.725h4.062c-.257.535-.4 1.112-.4 1.725 0 2.14 1.73 3.87 3.87 3.87 2.14 0 3.87-1.73 3.87-3.87 0-2.493-2.35-4.227-4.9-3.578l-1.622-6.08a2.25 2.25 0 00-2.16-1.622H6.484a.75.75 0 00-.75.75v.008c0 .414.336.75.75.75h8.188a.75.75 0 01.744.648l.243 1.022a4.5 4.5 0 01-4.43 5.176H6.182a.75.75 0 01-.744-.648l-2.43-9.113A.75.75 0 002.25 2.25z" />
+    </svg>
+);
+
+export const CurrencyDollarIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path d="M12 7.5a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
+      <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h15a3 3 0 013 3v15a3 3 0 01-3 3h-15a3 3 0 01-3-3V4.5zM8.25 9a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM12 15a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-3a.75.75 0 01-.75-.75v-.008a.75.75 0 01.75-.75h.008a.75.75 0 01.75-.75v-.008A.75.75 0 0112 15z" clipRule="evenodd" />
+    </svg>
+);

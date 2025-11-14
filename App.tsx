@@ -1,6 +1,6 @@
 
 import React, { useState, useReducer, useEffect } from 'react';
-import { User, Chat, Message, Connection, ConnectionStatus, Verification } from './types';
+import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType } from './types';
 import GroupLocker from './components/GroupLocker';
 import ChatRoom from './components/ChatRoom';
 import AdminPanel from './components/AdminPanel';
@@ -33,17 +33,19 @@ const App: React.FC = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [connections, setConnections] = useState<Connection[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
-    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData] = await Promise.all([
+    const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData] = await Promise.all([
         db.getUsers(),
         db.getChats(),
         db.getMessages(),
         db.getCurrentUser(),
         db.getLoggedInUsers(),
         db.getConnections(),
+        db.getTransactions(),
     ]);
     setUsers(usersData);
     setChats(chatsData);
@@ -51,6 +53,7 @@ const App: React.FC = () => {
     setCurrentUser(currentUserData);
     setLoggedInUsers(loggedInUsersData);
     setConnections(connectionsData);
+    setTransactions(transactionsData);
     setIsLoading(false);
   };
 
@@ -58,7 +61,6 @@ const App: React.FC = () => {
     fetchData();
     
     const handleBeforeUnload = () => {
-        // Log out the user when the tab is closed to set their status to offline
         if (db.isUserLoggedIn()) {
             db.logout();
         }
@@ -74,7 +76,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const handleStorageChange = (event: StorageEvent) => {
         if (event.key === 'bakko-db-update') {
-            // Data has been updated in another tab, refetch to sync UI
             fetchData();
         }
     };
@@ -152,7 +153,7 @@ const App: React.FC = () => {
 
   const handleDeleteUser = async (userId: string) => {
     await db.deleteUser(userId);
-    await fetchData(); // Refetch all data as this is a major change
+    await fetchData();
   };
 
   const handleDeleteGroup = async (chatId: string) => {
@@ -161,7 +162,6 @@ const App: React.FC = () => {
     setMessages(await db.getMessages());
   };
 
-  // --- Connection Handlers ---
   const handleSendRequest = async (toUserId: string) => {
       if (!currentUser) return;
       await db.addConnection(currentUser.id, toUserId);
@@ -186,7 +186,6 @@ const App: React.FC = () => {
       setConnections(await db.getConnections());
   };
   
-  // --- Verification Handlers ---
   const handleRequestVerification = async (userId: string) => {
     await db.requestUserVerification(userId);
     await fetchData();
@@ -197,13 +196,10 @@ const App: React.FC = () => {
     await fetchData();
   };
 
-
-  // --- Admin Handlers ---
   const handleBroadcastAnnouncement = async (text: string) => {
     if (!currentUser || !currentUser.isAdmin) return;
     await db.addBroadcastAnnouncement(text, currentUser.id);
     setMessages(await db.getMessages());
-    // Potentially re-fetch chats if announcement chat wasn't there before
     setChats(await db.getChats());
   };
   
@@ -211,6 +207,39 @@ const App: React.FC = () => {
     await db.adminForceConnectionStatus(fromUserId, toUserId, status);
     setConnections(await db.getConnections());
   };
+
+  // --- Wallet/Transaction Handlers ---
+  const handleTransferFunds = async (toUserId: string, amount: number) => {
+    if (!currentUser) return { success: false, message: "Not logged in" };
+    const toUser = users.find(u => u.id === toUserId);
+    if (!toUser) return { success: false, message: "Recipient not found" };
+    const result = await db.transferFunds(currentUser.id, toUserId, amount, `Transfer to ${toUser.username}`);
+    if (result.success) await fetchData();
+    return result;
+  };
+  
+  const handleAdminGrantFunds = async (toUserId: string, amount: number) => {
+    const toUser = users.find(u => u.id === toUserId);
+    if (!toUser) return { success: false, message: "Recipient not found" };
+    const result = await db.adminGrantFunds(toUserId, amount, `Admin grant to ${toUser.username}`);
+    if (result.success) await fetchData();
+    return result;
+  };
+
+  const handlePurchaseVerification = async (badgeType: VerificationBadgeType, durationDays: number | 'permanent', cost: number) => {
+    if (!currentUser) return { success: false, message: "Not logged in" };
+    const expiresAt = durationDays === 'permanent' ? undefined : Date.now() + durationDays * 24 * 60 * 60 * 1000;
+    const verification: Verification = {
+        status: 'approved',
+        badgeType,
+        expiresAt,
+    };
+    const description = `Purchased ${badgeType} badge (${durationDays === 'permanent' ? 'Permanent' : `${durationDays} Days`})`;
+    const result = await db.purchaseItem(currentUser.id, cost, description, verification);
+    if (result.success) await fetchData();
+    return result;
+  };
+
 
   if (isLoading) {
     return (
@@ -220,7 +249,6 @@ const App: React.FC = () => {
         </div>
     )
   }
-
 
   return (
     <div className="text-white min-h-screen w-full font-sans overflow-hidden">
@@ -232,6 +260,7 @@ const App: React.FC = () => {
             chats={chats}
             messages={messages}
             connections={connections}
+            transactions={transactions}
             onLogout={handleLogout}
             onUpdateUserProfile={handleUpdateUserProfile}
             onResetUserPassword={handleResetUserPassword}
@@ -244,6 +273,7 @@ const App: React.FC = () => {
             onBroadcastAnnouncement={handleBroadcastAnnouncement}
             onAdminForceConnectionStatus={handleAdminForceConnectionStatus}
             onAdminUpdateVerification={handleAdminUpdateUserVerification}
+            onAdminGrantFunds={handleAdminGrantFunds}
           />
         ) : (
           <ChatRoom
@@ -252,6 +282,7 @@ const App: React.FC = () => {
             chats={chats}
             messages={messages}
             connections={connections}
+            transactions={transactions}
             loggedInUsers={loggedInUsers}
             onSendMessage={handleSendMessage}
             onCreateChat={handleCreateChat}
@@ -268,6 +299,8 @@ const App: React.FC = () => {
                 email: currentUser.email || '',
                 phone: currentUser.phone || ''
             })}
+            onTransferFunds={handleTransferFunds}
+            onPurchaseVerification={handlePurchaseVerification}
           />
         )
       ) : (

@@ -1,7 +1,7 @@
-import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification } from '../types';
+import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, TransactionType } from '../types';
 
 const DB_NAME = 'bakko-db';
-const DB_VERSION = 2; // Incremented version for schema change
+const DB_VERSION = 3; // Incremented version for schema change
 const DB_UPDATE_KEY = 'bakko-db-update';
 
 
@@ -10,7 +10,8 @@ const USERS_STORE = 'users';
 const CHATS_STORE = 'chats';
 const MESSAGES_STORE = 'messages';
 const SESSION_STORE = 'session';
-const CONNECTIONS_STORE = 'connections'; // New store
+const CONNECTIONS_STORE = 'connections';
+const TRANSACTIONS_STORE = 'transactions';
 const ANNOUNCEMENT_CHAT_ID = 'chat-announcements-global';
 
 
@@ -41,7 +42,6 @@ class Database {
     }
     
     private notifyDataChanged = () => {
-        // This will trigger the 'storage' event in other tabs of the same origin.
         try {
             localStorage.setItem(DB_UPDATE_KEY, Date.now().toString());
         } catch (e) {
@@ -74,7 +74,10 @@ class Database {
                     const connectionsStore = db.createObjectStore(CONNECTIONS_STORE, { keyPath: 'id' });
                     connectionsStore.createIndex('by-from-to', ['fromUserId', 'toUserId'], { unique: true });
                     connectionsStore.createIndex('by-to-user', 'toUserId', { unique: false });
-                    connectionsStore.createIndex('by-status', 'status', { unique: false });
+                }
+                if (!db.objectStoreNames.contains(TRANSACTIONS_STORE)) {
+                    const transactionsStore = db.createObjectStore(TRANSACTIONS_STORE, { keyPath: 'id' });
+                    transactionsStore.createIndex('by-user', ['fromUserId', 'toUserId'], { unique: false });
                 }
             };
         });
@@ -94,30 +97,30 @@ class Database {
             id: 'user-admin-001',
             username: 'admin',
             avatar: '👑',
-            password: '197700', // The special password
+            password: '197700',
             online: false,
             isAdmin: true,
             verification: {
                 status: 'approved',
                 badgeType: 'gold',
             },
-            bio: 'The administrator of BAK-Ko.'
+            bio: 'The administrator of BAK-Ko.',
+            walletBalance: 999999999,
         };
 
         const getRequest = store.get(adminUser.id);
         
         return new Promise<void>((resolve, reject) => {
-            // We'll always `put` the latest version of the admin user to ensure it's up-to-date.
-            // But we need to preserve the `online` status if the user is already logged in.
             getRequest.onsuccess = () => {
                 const existingAdmin = getRequest.result;
                 if (existingAdmin) {
-                    adminUser.online = existingAdmin.online; // Preserve online status
+                    adminUser.online = existingAdmin.online;
+                    adminUser.walletBalance = existingAdmin.walletBalance || 999999999;
                 }
                 store.put(adminUser);
             }
             tx.oncomplete = () => {
-                this.notifyDataChanged(); // Notify in case of update
+                this.notifyDataChanged();
                 resolve();
             };
             tx.onerror = () => reject(tx.error);
@@ -181,6 +184,12 @@ class Database {
         return promisifyRequest(db.transaction(CONNECTIONS_STORE, 'readonly').objectStore(CONNECTIONS_STORE).getAll());
     };
 
+    getTransactions = async (): Promise<Transaction[]> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        return promisifyRequest(db.transaction(TRANSACTIONS_STORE, 'readonly').objectStore(TRANSACTIONS_STORE).getAll());
+    };
+
     isUserLoggedIn = (): boolean => !!this.sessionState.currentUserId;
     
     getCurrentUser = async (): Promise<User | null> => {
@@ -195,7 +204,6 @@ class Database {
         await this.isInitialized;
         if (this.sessionState.loggedInUserIds.length === 0) return [];
         const allUsers = await this.getUsers();
-        // Preserve order
         return this.sessionState.loggedInUserIds
             .map(id => allUsers.find(u => u.id === id))
             .filter((u): u is User => !!u);
@@ -216,7 +224,7 @@ class Database {
         const db = await this.dbPromise;
         const users = await this.getUsers();
         if (users.some(u => u.username.toLowerCase() === username.toLowerCase().trim())) {
-          return null; // Username already exists
+          return null;
         }
 
         const newUser: User = {
@@ -228,6 +236,7 @@ class Database {
           online: false,
           isAdmin: false,
           verification: { status: 'none' },
+          walletBalance: 0,
         };
         
         const userTx = db.transaction(USERS_STORE, 'readwrite');
@@ -306,14 +315,11 @@ class Database {
         await this.isInitialized;
         const db = await this.dbPromise;
 
-        // Add to logged in list if not already there
         if (!this.sessionState.loggedInUserIds.includes(user.id)) {
             this.sessionState.loggedInUserIds.push(user.id);
         }
-        // Set as current user
         this.sessionState.currentUserId = user.id;
 
-        // Update user's online status
         const tx = db.transaction(USERS_STORE, 'readwrite');
         const store = tx.objectStore(USERS_STORE);
         const userToUpdate = await promisifyRequest(store.get(user.id));
@@ -329,7 +335,6 @@ class Database {
         return (await this.getCurrentUser())!;
     }
     
-    // FIX: All missing methods from db are added below
     private async saveSession(): Promise<void> {
         const db = await this.dbPromise;
         const tx = db.transaction(SESSION_STORE, 'readwrite');
@@ -344,7 +349,6 @@ class Database {
         const db = await this.dbPromise;
         const loggedInIds = [...this.sessionState.loggedInUserIds];
         
-        // This is not perfectly atomic but avoids transaction inactivity errors with multiple awaits
         for (const userId of loggedInIds) {
             const tx = db.transaction(USERS_STORE, 'readwrite');
             const store = tx.objectStore(USERS_STORE);
@@ -495,8 +499,6 @@ class Database {
         const db = await this.dbPromise;
         const tx = db.transaction([USERS_STORE, MESSAGES_STORE, CHATS_STORE, CONNECTIONS_STORE], 'readwrite');
         tx.objectStore(USERS_STORE).delete(userId);
-        // This should be more robust, but for this app we'll assume cascading deletes are handled by logic
-        // For simplicity, we just delete the user record. Other records will be orphaned but won't break the UI.
         await new Promise<void>(r => tx.oncomplete = () => r());
         this.notifyDataChanged();
     }
@@ -506,13 +508,9 @@ class Database {
         const db = await this.dbPromise;
         const tx = db.transaction([CHATS_STORE, MESSAGES_STORE], 'readwrite');
         tx.objectStore(CHATS_STORE).delete(chatId);
-        // Also delete messages
         const msgStore = tx.objectStore(MESSAGES_STORE);
         const msgIndex = msgStore.index('chatId');
         
-        // FIX: The original cursor-based loop was incorrect for promise-based iteration.
-        // cursor.continue() returns void and cannot be promisified, causing a type error.
-        // This is replaced with a more robust getAllKeys() which is compatible with async/await.
         const keys = await promisifyRequest(msgIndex.getAllKeys(IDBKeyRange.only(chatId)));
         for (const key of keys) {
             msgStore.delete(key);
@@ -574,8 +572,6 @@ class Database {
             timestamp: Date.now(),
             type: 'announcement',
         };
-        await this.addMessage(newMessage.chatId, newMessage.authorId, newMessage.text);
-        // The addMessage call above is not quite right for announcements. A direct add is better.
         const db = await this.dbPromise;
         const tx = db.transaction(MESSAGES_STORE, 'readwrite');
         tx.objectStore(MESSAGES_STORE).add(newMessage);
@@ -639,6 +635,112 @@ class Database {
             return user;
         }
         return null;
+    }
+    
+    transferFunds = async (fromUserId: string, toUserId: string, amount: number, description: string): Promise<{success: boolean, message: string}> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction([USERS_STORE, TRANSACTIONS_STORE], 'readwrite');
+        const userStore = tx.objectStore(USERS_STORE);
+        const transactionStore = tx.objectStore(TRANSACTIONS_STORE);
+
+        const fromUserReq = userStore.get(fromUserId);
+        const toUserReq = userStore.get(toUserId);
+
+        return new Promise((resolve) => {
+            tx.onerror = () => resolve({ success: false, message: 'Database error.' });
+            tx.oncomplete = () => {
+                this.notifyDataChanged();
+                resolve({ success: true, message: 'Transfer successful!' });
+            };
+
+            Promise.all([promisifyRequest(fromUserReq), promisifyRequest(toUserReq)]).then(([fromUser, toUser]) => {
+                if (!fromUser || !toUser) {
+                    tx.abort();
+                    return resolve({ success: false, message: 'User not found.' });
+                }
+                if (fromUser.walletBalance < amount) {
+                    tx.abort();
+                    return resolve({ success: false, message: 'Insufficient funds.' });
+                }
+
+                fromUser.walletBalance -= amount;
+                toUser.walletBalance += amount;
+                userStore.put(fromUser);
+                userStore.put(toUser);
+
+                const newTransaction: Transaction = {
+                    id: `txn-${Date.now()}`,
+                    type: 'transfer',
+                    fromUserId,
+                    toUserId,
+                    amount,
+                    timestamp: Date.now(),
+                    description,
+                };
+                transactionStore.add(newTransaction);
+            });
+        });
+    }
+
+    adminGrantFunds = async (toUserId: string, amount: number, description: string): Promise<{success: boolean, message: string}> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction([USERS_STORE, TRANSACTIONS_STORE], 'readwrite');
+        const userStore = tx.objectStore(USERS_STORE);
+        const transactionStore = tx.objectStore(TRANSACTIONS_STORE);
+
+        const toUser = await promisifyRequest(userStore.get(toUserId));
+        if (!toUser) return { success: false, message: 'User not found.' };
+
+        toUser.walletBalance += amount;
+        userStore.put(toUser);
+
+        const newTransaction: Transaction = {
+            id: `txn-${Date.now()}`,
+            type: 'admin_grant',
+            fromUserId: 'admin-grant',
+            toUserId,
+            amount,
+            timestamp: Date.now(),
+            description,
+        };
+        transactionStore.add(newTransaction);
+        
+        await new Promise<void>(r => tx.oncomplete = () => r());
+        this.notifyDataChanged();
+        return { success: true, message: 'Funds granted.' };
+    }
+    
+    purchaseItem = async (userId: string, cost: number, description: string, verification: Verification): Promise<{success: boolean, message: string}> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction([USERS_STORE, TRANSACTIONS_STORE], 'readwrite');
+        const userStore = tx.objectStore(USERS_STORE);
+        const transactionStore = tx.objectStore(TRANSACTIONS_STORE);
+
+        const user = await promisifyRequest(userStore.get(userId));
+        if (!user) return { success: false, message: 'User not found.' };
+        if (user.walletBalance < cost) return { success: false, message: 'Insufficient funds.' };
+
+        user.walletBalance -= cost;
+        user.verification = verification;
+        userStore.put(user);
+
+        const newTransaction: Transaction = {
+            id: `txn-${Date.now()}`,
+            type: 'purchase',
+            fromUserId: userId,
+            toUserId: 'marketplace',
+            amount: cost,
+            timestamp: Date.now(),
+            description,
+        };
+        transactionStore.add(newTransaction);
+
+        await new Promise<void>(r => tx.oncomplete = () => r());
+        this.notifyDataChanged();
+        return { success: true, message: 'Purchase successful!' };
     }
 }
 

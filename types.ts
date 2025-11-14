@@ -21,6 +21,7 @@ export interface User {
   recoveryToken?: string; // For password recovery
   recoveryTokenExpiry?: number; // Expiry timestamp for the token
   verification?: Verification;
+  walletBalance: number; // User's currency balance
 }
 
 export interface Message {
@@ -55,10 +56,22 @@ export enum ConnectionStatus {
 }
 
 export interface Connection {
-  id: string;
+  id:string;
   fromUserId: string;
   toUserId: string;
   status: ConnectionStatus;
   requestedAt: number;
   updatedAt: number;
+}
+
+export type TransactionType = 'transfer' | 'purchase' | 'admin_grant';
+
+export interface Transaction {
+  id: string;
+  type: TransactionType;
+  fromUserId: string; // 'admin-grant' for admin, or a user ID
+  toUserId: string;   // 'marketplace' for a purchase, or a user ID
+  amount: number;
+  timestamp: number;
+  description: string;
 }
