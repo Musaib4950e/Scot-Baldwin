@@ -22,6 +22,8 @@ export interface User {
   recoveryTokenExpiry?: number; // Expiry timestamp for the token
   verification?: Verification;
   walletBalance: number; // User's currency balance
+  isFrozen?: boolean;
+  frozenUntil?: number; // timestamp, undefined for permanent
 }
 
 export interface Message {

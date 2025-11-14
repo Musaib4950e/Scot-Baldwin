@@ -1,3 +1,4 @@
+
 import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, TransactionType } from '../types';
 
 const DB_NAME = 'bakko-db';
@@ -659,6 +660,11 @@ class Database {
                     tx.abort();
                     return resolve({ success: false, message: 'User not found.' });
                 }
+                const isFrozen = fromUser.isFrozen && (!fromUser.frozenUntil || fromUser.frozenUntil > Date.now());
+                if (isFrozen) {
+                    tx.abort();
+                    return resolve({ success: false, message: 'Your account is frozen.' });
+                }
                 if (fromUser.walletBalance < amount) {
                     tx.abort();
                     return resolve({ success: false, message: 'Insufficient funds.' });
@@ -746,6 +752,25 @@ class Database {
         await new Promise<void>(r => tx.oncomplete = () => r());
         this.notifyDataChanged();
         return { success: true, message: 'Purchase successful!' };
+    }
+
+    adminUpdateUserFreezeStatus = async (userId: string, isFrozen: boolean, frozenUntil?: number): Promise<void> => {
+        await this.isInitialized;
+        const db = await this.dbPromise;
+        const tx = db.transaction(USERS_STORE, 'readwrite');
+        const store = tx.objectStore(USERS_STORE);
+        const user = await promisifyRequest(store.get(userId));
+        if (user) {
+            user.isFrozen = isFrozen;
+            if (isFrozen) {
+                user.frozenUntil = frozenUntil;
+            } else {
+                delete user.frozenUntil;
+            }
+            store.put(user);
+        }
+        await new Promise<void>(r => tx.oncomplete = () => r());
+        this.notifyDataChanged();
     }
 }
 

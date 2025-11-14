@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
@@ -102,14 +100,14 @@ const ProfileModal: React.FC<{
     onClose: () => void;
     currentUser: User;
     users: User[];
-    connections: Connection[];
     transactions: Transaction[];
     onUpdateProfile: (params: { avatar: string, bio: string }) => Promise<void>;
     onRequestVerification: (userId: string) => Promise<void>;
     onTransferFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
     onPurchaseVerification: (badgeType: VerificationBadgeType, duration: number | 'permanent', cost: number) => Promise<{success: boolean, message: string}>;
+    isAccountFrozen: boolean;
 }> = (props) => {
-    const { isOpen, onClose, currentUser, users, connections, transactions, onUpdateProfile, onRequestVerification, onTransferFunds, onPurchaseVerification } = props;
+    const { isOpen, onClose, currentUser, users, transactions, onUpdateProfile, onRequestVerification, onTransferFunds, onPurchaseVerification, isAccountFrozen } = props;
     
     const [view, setView] = useState<'profile' | 'wallet' | 'market'>('profile');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -129,14 +127,9 @@ const ProfileModal: React.FC<{
             .sort((a, b) => b.timestamp - a.timestamp);
     }, [transactions, currentUser.id]);
 
-    const connectedUsers = useMemo(() => {
-        const acceptedUserIds = new Set(
-            connections
-                .filter(c => c.status === ConnectionStatus.ACCEPTED && (c.fromUserId === currentUser.id || c.toUserId === currentUser.id))
-                .flatMap(c => [c.fromUserId, c.toUserId])
-        );
-        return users.filter(u => u.id !== currentUser.id && acceptedUserIds.has(u.id));
-    }, [connections, users, currentUser.id]);
+    const allOtherUsers = useMemo(() => {
+        return users.filter(u => u.id !== currentUser.id && !u.isAdmin);
+    }, [users, currentUser.id]);
 
 
     // Badge Prices
@@ -286,13 +279,13 @@ const ProfileModal: React.FC<{
                 </div>
                 <form onSubmit={handleTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
                     <h3 className="font-semibold text-lg text-white">Send Funds</h3>
-                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}>
                         <option value="">Select a user...</option>
-                        {connectedUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                        {allOtherUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                     </select>
-                    <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
                     {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
-                    <button type="submit" disabled={isSubmitting || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                    <button type="submit" disabled={isSubmitting || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
                         {isSubmitting ? 'Sending...' : 'Send'}
                     </button>
                 </form>
@@ -345,7 +338,7 @@ const ProfileModal: React.FC<{
                                         <button 
                                             key={duration}
                                             onClick={() => handlePurchase(badge, duration, finalCost)}
-                                            disabled={isSubmitting || currentUser.walletBalance < finalCost}
+                                            disabled={isSubmitting || isAccountFrozen || currentUser.walletBalance < finalCost}
                                             className="p-2 bg-white/5 rounded-lg border border-white/10 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex flex-col justify-between"
                                         >
                                             <p className="font-semibold capitalize">{duration === 'permanent' ? 'Permanent' : `${duration} Days`}</p>
@@ -371,7 +364,8 @@ const TransferModal: React.FC<{
     recipient: User;
     currentUser: User;
     onTransfer: (amount: number) => Promise<{success: boolean, message: string}>;
-}> = ({ isOpen, onClose, recipient, currentUser, onTransfer }) => {
+    isAccountFrozen: boolean;
+}> = ({ isOpen, onClose, recipient, currentUser, onTransfer, isAccountFrozen }) => {
     const [amount, setAmount] = useState('');
     const [message, setMessage] = useState({ type: '', text: '' });
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -408,11 +402,11 @@ const TransferModal: React.FC<{
             </div>
             <p className="text-center text-slate-300 mb-4">You are sending money to <strong className="text-white">{recipient.username}</strong>.</p>
             <form onSubmit={handleSubmit} className="space-y-3">
-                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}/>
                 {message.text && <p className={`text-sm text-center ${message.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{message.text}</p>}
                 <div className="flex justify-end gap-3 pt-2">
                     <button type="button" onClick={onClose} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button>
-                    <button type="submit" disabled={isSubmitting || (!!parseFloat(amount) && currentUser.walletBalance < parseFloat(amount))} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                    <button type="submit" disabled={isSubmitting || isAccountFrozen || (!!parseFloat(amount) && currentUser.walletBalance < parseFloat(amount))} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
                         {isSubmitting ? 'Sending...' : 'Confirm Transfer'}
                     </button>
                 </div>
@@ -518,14 +512,26 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
             .sort((a, b) => b.timestamp - a.timestamp);
     }, [transactions, currentUser.id]);
 
-  const connectedUsers = useMemo(() => {
-    const acceptedUserIds = new Set(
-        connections
-            .filter(c => c.status === ConnectionStatus.ACCEPTED && (c.fromUserId === currentUser.id || c.toUserId === currentUser.id))
-            .flatMap(c => [c.fromUserId, c.toUserId])
-    );
-    return users.filter(u => u.id !== currentUser.id && acceptedUserIds.has(u.id));
-  }, [connections, users, currentUser.id]);
+  const allOtherUsers = useMemo(() => {
+    return users.filter(u => u.id !== currentUser.id && !u.isAdmin);
+  }, [users, currentUser.id]);
+
+  const isAccountFrozen = useMemo(() => {
+    if (!currentUser.isFrozen) return false;
+    if (currentUser.frozenUntil && currentUser.frozenUntil < Date.now()) {
+        // NOTE: Ideally, an expired freeze would be cleared from the DB, but this client-side check is a good fallback.
+        return false; 
+    }
+    return true;
+  }, [currentUser.isFrozen, currentUser.frozenUntil]);
+
+  const freezeMessage = useMemo(() => {
+    if (!isAccountFrozen) return '';
+    if (currentUser.frozenUntil) {
+        return `Your account is frozen until ${new Date(currentUser.frozenUntil).toLocaleString()}. You cannot make any transactions.`;
+    }
+    return 'Your account is permanently frozen. You cannot make any transactions.';
+  }, [isAccountFrozen, currentUser.frozenUntil]);
 
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [activeChatMessages, isOtherUserTyping]);
@@ -731,8 +737,8 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         </Modal>
 
       <AddAccountModal isOpen={isAddAccountModalOpen} onClose={() => setIsAddAccountModalOpen(false)} onLoginSuccess={onLogin} />
-      <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} currentUser={currentUser} users={users} connections={connections} transactions={transactions} onUpdateProfile={onUpdateUserProfile} onRequestVerification={onRequestVerification} onTransferFunds={onTransferFunds} onPurchaseVerification={onPurchaseVerification} />
-      {otherUserInDM && <TransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} recipient={otherUserInDM} currentUser={currentUser} onTransfer={(amount) => onTransferFunds(otherUserInDM.id, amount)} />}
+      <ProfileModal isOpen={isProfileModalOpen} onClose={() => setIsProfileModalOpen(false)} currentUser={currentUser} users={users} transactions={transactions} onUpdateProfile={onUpdateUserProfile} onRequestVerification={onRequestVerification} onTransferFunds={onTransferFunds} onPurchaseVerification={onPurchaseVerification} isAccountFrozen={isAccountFrozen} />
+      {otherUserInDM && <TransferModal isOpen={isTransferModalOpen} onClose={() => setIsTransferModalOpen(false)} recipient={otherUserInDM} currentUser={currentUser} onTransfer={(amount) => onTransferFunds(otherUserInDM.id, amount)} isAccountFrozen={isAccountFrozen} />}
 
       <div className="h-screen flex bg-black/20">
       <aside className={`w-full md:w-1/3 lg:w-1/4 xl:w-1/5 flex flex-col bg-black/10 backdrop-blur-2xl border-r border-white/10 transition-transform duration-300 ease-in-out ${showChatList ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 md:flex`}>
@@ -799,6 +805,12 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
               <button onClick={onLogout} title="Logout All Accounts" className="p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"><ArrowLeftOnRectangleIcon className="w-6 h-6" /></button>
           </div>
         </header>
+
+        {isAccountFrozen && (
+            <div className="flex-shrink-0 p-3 bg-red-900/50 text-center text-sm text-red-200 border-b border-red-500/20">
+                <p><BanIcon className="w-4 h-4 inline-block mr-1.5" />{freezeMessage}</p>
+            </div>
+        )}
         
         {sidebarView === 'chats' && (
         <>
@@ -821,13 +833,13 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 </div>
                 <form onSubmit={handlePanelTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
                     <h3 className="font-semibold text-lg text-white">Send Funds</h3>
-                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                        <option value="">Select a connection...</option>
-                        {connectedUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
+                    <select value={transferUser} onChange={e => setTransferUser(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}>
+                        <option value="">Select a user...</option>
+                        {allOtherUsers.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                     </select>
-                    <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                    <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2.5 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}/>
                     {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
-                    <button type="submit" disabled={isSubmittingTransfer || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                    <button type="submit" disabled={isSubmittingTransfer || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
                         {isSubmittingTransfer ? 'Sending...' : 'Send'}
                     </button>
                 </form>
@@ -879,7 +891,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 </div>
                  {otherUserInDM && (
                     <div className="flex items-center gap-2 ml-auto">
-                        <button onClick={() => setIsTransferModalOpen(true)} title={`Send money to ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-green-400 hover:bg-white/10 rounded-full transition-colors"><CurrencyDollarIcon className="w-6 h-6" /></button>
+                        <button onClick={() => setIsTransferModalOpen(true)} title={`Send money to ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-green-400 hover:bg-white/10 rounded-full transition-colors" disabled={isAccountFrozen}><CurrencyDollarIcon className="w-6 h-6" /></button>
                         <button onClick={handleBlockUser} title={`Block ${otherUserInDM.username}`} className="p-2 text-slate-400 hover:text-red-400 hover:bg-white/10 rounded-full transition-colors"><BanIcon className="w-6 h-6" /></button>
                     </div>
                  )}

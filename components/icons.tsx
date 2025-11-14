@@ -6,6 +6,13 @@ export const LockClosedIcon: React.FC<{ className?: string }> = ({ className = "
   </svg>
 );
 
+export const LockOpenIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <path d="M18 1.5c2.9 0 5.25 2.35 5.25 5.25v3.75a.75.75 0 01-1.5 0V6.75a3.75 3.75 0 10-7.5 0v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a.75.75 0 011.5 0v6.75a4.5 4.5 0 01-4.5 4.5H9a4.5 4.5 0 01-4.5-4.5v-6.75a4.5 4.5 0 014.5-4.5v-3A5.25 5.25 0 0118 1.5z" />
+  </svg>
+);
+
+
 export const CodeBracketIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
     <path fillRule="evenodd" d="M8.25 3.75H6a2.25 2.25 0 00-2.25 2.25v12A2.25 2.25 0 006 20.25h2.25a.75.75 0 000-1.5H6a.75.75 0 01-.75-.75V6c0-.414.336-.75.75-.75h2.25a.75.75 0 000-1.5zM15.75 3.75h2.25a2.25 2.25 0 012.25 2.25v12a2.25 2.25 0 01-2.25 2.25h-2.25a.75.75 0 010-1.5h2.25a.75.75 0 00.75-.75V6a.75.75 0 00-.75-.75h-2.25a.75.75 0 010-1.5z" clipRule="evenodd" />
@@ -56,7 +63,7 @@ export const ArrowLeftIcon: React.FC<{ className?: string }> = ({ className = "w
 );
 
 export const InstagramIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor">
+    <svg xmlns="http://www.w3.org/2000/svg" className={className} viewBox="0 0 24 24" fill="currentColor" >
         <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.85s-.012 3.584-.07 4.85c-.148 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07s-3.584-.012-4.85-.07c-3.252-.148-4.771-1.691-4.919-4.919-.058-1.265-.07-1.645-.07-4.85s.012-3.584.07-4.85c.148-3.225 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.85-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948s.014 3.667.072 4.947c.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072s3.667-.014 4.947-.072c4.358-.2 6.78-2.618 6.98-6.98.059-1.281.073-1.689.073-4.948s-.014-3.667-.072-4.947c-.2-4.358-2.618-6.78-6.98-6.98C15.667.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zm0 10.324a4.162 4.162 0 110-8.324 4.162 4.162 0 010 8.324zm6.406-11.845a1.44 1.44 0 100 2.88 1.44 1.44 0 000-2.88z"/>
     </svg>
 );
@@ -191,12 +198,4 @@ export const ShoppingCartIcon: React.FC<{ className?: string }> = ({ className =
 export const CurrencyDollarIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
       <path d="M12 7.5a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
-      <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h15a3 3 0 013 3v15a3 3 0 01-3 3h-15a3 3 0 01-3-3V4.5zM8.25 9a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM12 15a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-3a.75.75 0 01-.75-.75v-.008a.75.75 0 01.75-.75h.008a.75.75 0 01.75-.75v-.008A.75.75 0 0112 15z" clipRule="evenodd" />
-    </svg>
-);
-
-export const ChatBubbleLeftRightIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
-      <path fillRule="evenodd" d="M3.47 3.47a.75.75 0 011.06 0L8.25 7.19V6.75a.75.75 0 01.75-.75h6a.75.75 0 01.75.75v7.5a.75.75 0 01-.75.75h-2.25a.75.75 0 010-1.5h1.5V7.5h-4.5v1.81L9.53 7.72a.75.75 0 010 1.06l-4.72 4.72V15a.75.75 0 01-.75.75h-1.5a.75.75 0 01-.75-.75V4.53a.75.75 0 010-1.06zm14.28 2.28a.75.75 0 011.06 0l4.72 4.72v-1.81h1.5a.75.75 0 010 1.5h-2.25a.75.75 0 01-.75-.75v-6a.75.75 0 01-.75-.75h-7.5a.75.75 0 01-.75-.75v-1.5a.75.75 0 011.5 0v.75h6.19l-4.72-4.72a.75.75 0 111.06-1.06l4.72 4.72z" clipRule="evenodd" />
-    </svg>
-);
+      <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h15a3 3 0 013 3v15a3 3 0 01-3 3h-15a3 3 0 01-3-3V4.5zM8.25 9a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM12 15a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-3a.75.75 0

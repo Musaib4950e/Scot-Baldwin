@@ -255,6 +255,11 @@ const App: React.FC = () => {
     if (result.success) await fetchData();
     return result;
   };
+  
+  const handleAdminUpdateUserFreezeStatus = async (userId: string, isFrozen: boolean, frozenUntil?: number) => {
+    await db.adminUpdateUserFreezeStatus(userId, isFrozen, frozenUntil);
+    await fetchData();
+  };
 
 
   if (isLoading) {
@@ -290,6 +295,7 @@ const App: React.FC = () => {
             onAdminForceConnectionStatus={handleAdminForceConnectionStatus}
             onAdminUpdateVerification={handleAdminUpdateUserVerification}
             onAdminGrantFunds={handleAdminGrantFunds}
+            onAdminUpdateUserFreezeStatus={handleAdminUpdateUserFreezeStatus}
           />
         ) : (
           <ChatRoom
