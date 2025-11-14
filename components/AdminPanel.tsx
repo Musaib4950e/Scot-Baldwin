@@ -1,7 +1,6 @@
 
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report } from '../types';
+import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report, TransactionType } from '../types';
 import { db, MARKETPLACE_ITEMS } from './db';
 import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon, ExclamationTriangleIcon } from './icons';
 import ChatMessage from './ChatMessage';
@@ -136,6 +135,58 @@ const formatCurrency = (amount: number | null | undefined) => {
         return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(0);
     }
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+};
+
+const UserCell: React.FC<{ userId: string; users: User[] }> = ({ userId, users }) => {
+    if (userId === 'admin-grant') {
+        return <div className="flex items-center gap-2 text-sm"><div className="p-1.5 bg-purple-500/20 rounded-md"><ShieldCheckIcon className="w-4 h-4 text-purple-300"/></div><span className="font-semibold text-purple-300">Admin Grant</span></div>;
+    }
+    if (userId === 'marketplace') {
+        return <div className="flex items-center gap-2 text-sm"><div className="p-1.5 bg-cyan-500/20 rounded-md"><ShoppingCartIcon className="w-4 h-4 text-cyan-300"/></div><span className="font-semibold text-cyan-300">Marketplace</span></div>;
+    }
+    const user = users.find(u => u.id === userId);
+    if (!user) {
+        return <div className="flex items-center gap-2 text-sm"><div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold flex-shrink-0">?</div><span className="text-slate-500 italic">Deleted User</span></div>;
+    }
+    return (
+        <div className="flex items-center gap-2 text-sm">
+            <AvatarWithBorder user={user} containerClasses="w-8 h-8" textClasses="text-sm" />
+            <UserName user={user} className="font-semibold" />
+        </div>
+    );
+};
+
+const TransactionTypeBadge: React.FC<{ type: TransactionType }> = ({ type }) => {
+    const typeStyles = {
+        transfer: {
+            icon: <CurrencyDollarIcon className="w-4 h-4 text-green-300"/>,
+            text: 'Transfer',
+            bg: 'bg-green-500/10',
+            textColor: 'text-green-300',
+        },
+        purchase: {
+            icon: <ShoppingCartIcon className="w-4 h-4 text-cyan-300"/>,
+            text: 'Purchase',
+            bg: 'bg-cyan-500/10',
+            textColor: 'text-cyan-300',
+        },
+        admin_grant: {
+            icon: <ShieldCheckIcon className="w-4 h-4 text-purple-300"/>,
+            text: 'Admin Grant',
+            bg: 'bg-purple-500/10',
+            textColor: 'text-purple-300',
+        },
+    };
+
+    const style = typeStyles[type];
+    if (!style) return null;
+
+    return (
+        <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-semibold ${style.bg} ${style.textColor}`}>
+            {style.icon}
+            <span>{style.text}</span>
+        </div>
+    );
 };
 
 export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
@@ -687,15 +738,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             <h1 className="text-4xl font-bold mb-8 text-white">Transaction Log</h1>
                             <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden">
                                 <table className="w-full text-left">
-                                    <thead className="bg-white/5 border-b border-white/10">
-                                        <tr><th className="p-4 font-semibold">Date</th><th className="p-4 font-semibold">Description</th><th className="p-4 font-semibold text-right">Amount</th></tr>
+                                    <thead className="bg-white/5 border-b border-white/10 text-sm">
+                                        <tr>
+                                            <th className="p-4 font-semibold text-left">Date</th>
+                                            <th className="p-4 font-semibold text-left">Type</th>
+                                            <th className="p-4 font-semibold text-left">From</th>
+                                            <th className="p-4 font-semibold text-left">To</th>
+                                            <th className="p-4 font-semibold text-left">Description</th>
+                                            <th className="p-4 font-semibold text-right">Amount</th>
+                                        </tr>
                                     </thead>
                                     <tbody>
-                                        {transactions.sort((a,b) => b.timestamp - a.timestamp).map(t => (
-                                            <tr key={t.id} className="border-b border-white/10 last:border-b-0 text-sm">
-                                                <td className="p-4 text-slate-400">{new Date(t.timestamp).toLocaleString()}</td>
-                                                <td className="p-4">{t.description}</td>
-                                                <td className="p-4 text-right font-semibold font-mono">{formatCurrency(t.amount)}</td>
+                                        {transactions.sort((a, b) => b.timestamp - a.timestamp).map(t => (
+                                            <tr key={t.id} className="border-b border-white/10 last:border-b-0 text-sm hover:bg-white/5 transition-colors">
+                                                <td className="p-4 text-slate-400 whitespace-nowrap">{new Date(t.timestamp).toLocaleString()}</td>
+                                                <td className="p-4"><TransactionTypeBadge type={t.type} /></td>
+                                                <td className="p-4"><UserCell userId={t.fromUserId} users={users} /></td>
+                                                <td className="p-4"><UserCell userId={t.toUserId} users={users} /></td>
+                                                <td className="p-4 text-slate-300">{t.description}</td>
+                                                <td className="p-4 text-right font-bold font-mono whitespace-nowrap">
+                                                    {t.type === 'admin_grant' ? (
+                                                        <span className="text-green-400">+{formatCurrency(t.amount)}</span>
+                                                    ) : (
+                                                        <span className="text-white">{formatCurrency(t.amount)}</span>
+                                                    )}
+                                                </td>
                                             </tr>
                                         ))}
                                     </tbody>
