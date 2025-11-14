@@ -576,9 +576,199 @@ const ProfileModal: React.FC<{
     );
 };
 
-// FIX: Added the missing ChatRoom component and its default export.
+interface SidebarProps {
+  currentUser: User;
+  setIsProfileModalOpen: (isOpen: boolean) => void;
+  onLogout: () => Promise<void>;
+  searchTerm: string;
+  setSearchTerm: (term: string) => void;
+  sidebarView: 'chats' | 'users' | 'requests';
+  setSidebarView: (view: 'chats' | 'users' | 'requests') => void;
+  friendRequests: Connection[];
+  isMultiDeleteMode: boolean;
+  setIsMultiDeleteMode: (isDeleting: boolean) => void;
+  isMobileSidebarOpen: boolean;
+  filteredChats: (Chat & { lastMessage?: Message })[];
+  activeChatId: string | null;
+  handleSelectChat: (chatId: string) => void;
+  chatsToDelete: string[];
+  users: User[];
+  filteredUsers: User[];
+  connections: Connection[];
+  onSendRequest: (toUserId: string) => Promise<void>;
+  handleCreateNewChat: (targetUser: User) => Promise<void>;
+  onUpdateConnection: (connectionId: string, status: ConnectionStatus) => Promise<void>;
+  handleDeleteSelectedChats: () => Promise<void>;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ currentUser, setIsProfileModalOpen, onLogout, searchTerm, setSearchTerm, sidebarView, setSidebarView, friendRequests, isMultiDeleteMode, setIsMultiDeleteMode, isMobileSidebarOpen, filteredChats, activeChatId, handleSelectChat, chatsToDelete, users, filteredUsers, connections, onSendRequest, handleCreateNewChat, onUpdateConnection, handleDeleteSelectedChats }) => (
+    <aside className={`absolute md:relative z-20 w-80 md:w-96 h-full bg-black/20 backdrop-blur-2xl border-r border-white/10 flex-shrink-0 flex flex-col transition-transform duration-300 ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
+        <div className="p-4 border-b border-white/10 flex-shrink-0">
+            <div className="flex items-center gap-3">
+                <button onClick={() => setIsProfileModalOpen(true)}>
+                    <AvatarWithBorder user={currentUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" />
+                </button>
+                <div className="flex-grow overflow-hidden">
+                    <div className="flex items-center gap-1.5"><UserName user={currentUser} className="font-bold text-lg truncate" />{renderUserBadge(currentUser)}</div>
+                    <p className="text-sm text-slate-400 truncate">{currentUser.bio || "No bio set"}</p>
+                </div>
+                <button onClick={onLogout} className="p-2 text-slate-400 hover:text-white transition-colors flex-shrink-0"><ArrowLeftOnRectangleIcon className="w-6 h-6" /></button>
+            </div>
+        </div>
+
+        <div className="p-4 flex-shrink-0">
+            <div className="relative">
+                <MagnifyingGlassIcon className="w-5 h-5 absolute top-1/2 -translate-y-1/2 left-4 text-slate-400" />
+                <input type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-white/5 border border-transparent rounded-full pl-11 pr-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
+            </div>
+        </div>
+        
+        <div className="px-4 pb-2 border-b border-white/10 flex-shrink-0">
+            <nav className="flex justify-between items-center">
+                <div className="flex space-x-1 bg-black/20 p-1 rounded-full">
+                    <button onClick={() => setSidebarView('chats')} className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'chats' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Chats</button>
+                    <button onClick={() => setSidebarView('users')} className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'users' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Users</button>
+                    <button onClick={() => setSidebarView('requests')} className={`relative px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'requests' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>
+                        Requests {friendRequests.length > 0 && <span className="absolute -top-1 -right-1 h-4 w-4 text-xs bg-red-500 rounded-full">{friendRequests.length}</span>}
+                    </button>
+                </div>
+                 {sidebarView === 'chats' && (
+                    <button onClick={() => setIsMultiDeleteMode(!isMultiDeleteMode)} className={`p-2 rounded-full transition-colors ${isMultiDeleteMode ? 'bg-red-500/20 text-red-300' : 'text-slate-400 hover:bg-white/10'}`}>
+                       <TrashIcon className="w-5 h-5" />
+                    </button>
+                )}
+            </nav>
+        </div>
+        
+        <div className="flex-grow overflow-y-auto custom-scrollbar">
+            {sidebarView === 'chats' && (
+                <div className="p-2 space-y-1">
+                    {filteredChats.map(chat => {
+                        const otherUserId = chat.members.find(id => id !== currentUser.id);
+                        const otherUser = users.find(u => u.id === otherUserId);
+                        return (
+                            <div key={chat.id} onClick={() => handleSelectChat(chat.id)} className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-colors ${activeChatId === chat.id && !isMultiDeleteMode ? 'bg-cyan-500/20' : 'hover:bg-white/5'}`}>
+                                {isMultiDeleteMode && (
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 flex-shrink-0 ${chatsToDelete.includes(chat.id) ? 'bg-cyan-500 border-cyan-400' : 'border-slate-500 bg-white/10'}`}>
+                                        {chatsToDelete.includes(chat.id) && <CheckIcon className="w-3 h-3 text-white" />}
+                                    </div>
+                                )}
+                                {chat.type === 'dm' && otherUser ? <AvatarWithBorder user={otherUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" /> : <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0"><UsersIcon className="w-7 h-7"/></div> }
+                                <div className="flex-grow overflow-hidden">
+                                    <p className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</p>
+                                    <p className="text-sm text-slate-400 truncate">{chat.lastMessage?.text || "No messages yet"}</p>
+                                </div>
+                                {chat.lastMessage && <span className="text-xs text-slate-500 self-start">{new Date(chat.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})}</span>}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            {sidebarView === 'users' && (
+                <div className="p-2 space-y-1">
+                    {filteredUsers.map(user => {
+                        const connection = connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === user.id) || (c.fromUserId === user.id && c.toUserId === currentUser.id));
+                        return (
+                            <div key={user.id} className="flex items-center gap-3 p-3 rounded-2xl">
+                                <AvatarWithBorder user={user} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" />
+                                <div className="flex-grow overflow-hidden"><div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold truncate" />{renderUserBadge(user)}</div></div>
+                                {(!connection || connection.status === ConnectionStatus.REJECTED) && <button onClick={() => onSendRequest(user.id)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20"><UserPlusIcon className="w-5 h-5"/></button>}
+                                {connection?.status === ConnectionStatus.PENDING && <span className="text-xs text-amber-400 font-semibold">Pending</span>}
+                                {connection?.status === ConnectionStatus.ACCEPTED && <button onClick={() => handleCreateNewChat(user)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20"><ChatBubbleLeftRightIcon className="w-5 h-5"/></button>}
+                                {connection?.status === ConnectionStatus.BLOCKED && <span className="text-xs text-red-400 font-semibold">Blocked</span>}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            {sidebarView === 'requests' && (
+                <div className="p-2 space-y-1">
+                    {friendRequests.map(req => {
+                        const fromUser = users.find(u => u.id === req.fromUserId);
+                        if (!fromUser) return null;
+                        return (
+                            <div key={req.id} className="flex items-center gap-3 p-3 rounded-2xl">
+                                <AvatarWithBorder user={fromUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" />
+                                <div className="flex-grow overflow-hidden"><div className="flex items-center gap-1.5"><UserName user={fromUser} className="font-semibold truncate" />{renderUserBadge(fromUser)}</div></div>
+                                <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.REJECTED)} className="p-2 bg-red-500/20 text-red-300 rounded-full hover:bg-red-500/30"><XMarkIcon className="w-5 h-5"/></button>
+                                <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.ACCEPTED)} className="p-2 bg-green-500/20 text-green-300 rounded-full hover:bg-green-500/30"><CheckIcon className="w-5 h-5" /></button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+        {isMultiDeleteMode && (
+            <div className="p-4 border-t border-white/10 flex items-center justify-between">
+                <span className="text-sm font-semibold">{chatsToDelete.length} selected</span>
+                <button onClick={handleDeleteSelectedChats} disabled={chatsToDelete.length === 0} className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-sm disabled:opacity-50">Delete</button>
+            </div>
+        )}
+    </aside>
+);
+
+interface ChatAreaProps {
+  activeChat: Chat | undefined;
+  currentUser: User;
+  users: User[];
+  chatMessages: Message[];
+  messagesEndRef: React.RefObject<HTMLDivElement>;
+  isAccountFrozen: boolean;
+  newMessage: string;
+  setNewMessage: (value: string) => void;
+  handleSendMessageSubmit: (e: React.FormEvent) => void;
+  setIsMobileSidebarOpen: (isOpen: boolean) => void;
+  openReportModal: (user: User) => void;
+}
+
+const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, currentUser, users, chatMessages, messagesEndRef, isAccountFrozen, newMessage, setNewMessage, handleSendMessageSubmit, setIsMobileSidebarOpen, openReportModal }) => {
+    const otherUser = activeChat?.type === ChatType.DM ? users.find(u => u.id === activeChat.members.find(id => id !== currentUser.id)) : null;
+    
+    return (
+        <main className="flex-1 flex flex-col bg-black/10">
+            {activeChat ? (
+                <>
+                    <header className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0 bg-black/10 backdrop-blur-2xl z-10">
+                        <button onClick={() => setIsMobileSidebarOpen(true)} className="md:hidden p-2 text-slate-400 hover:text-white"><ChatBubbleLeftRightIcon className="w-6 h-6" /></button>
+                        {activeChat.type === 'dm' && otherUser ? <AvatarWithBorder user={otherUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" /> : <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0"><UsersIcon className="w-7 h-7"/></div> }
+                        <div className="flex-grow">
+                            <div className="flex items-center gap-2"><p className="text-xl font-bold">{getChatDisplayName(activeChat, currentUser, users)}</p>{otherUser && renderUserBadge(otherUser, 'large')}</div>
+                            {otherUser?.online && <p className="text-sm text-green-400">Online</p>}
+                        </div>
+                        {otherUser && <button onClick={() => openReportModal(otherUser)} title="Report User" className="p-2 text-slate-400 hover:text-red-400"><FlagIcon className="w-6 h-6"/></button>}
+                    </header>
+                    <div className="flex-grow p-6 overflow-y-auto space-y-6 custom-scrollbar">
+                        {chatMessages.map(msg => {
+                            const author = users.find(u => u.id === msg.authorId);
+                            if (!author) return null;
+                            return <ChatMessage key={msg.id} message={msg} author={author} isCurrentUser={author.id === currentUser.id} isGroupChat={activeChat.type === ChatType.GROUP} />;
+                        })}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    <footer className="p-4 flex-shrink-0">
+                        {isAccountFrozen && (
+                            <div className="text-center p-3 mb-2 bg-red-500/10 text-red-300 rounded-lg text-sm">Your account is frozen. You cannot send messages.</div>
+                        )}
+                        <form onSubmit={handleSendMessageSubmit} className="flex items-center gap-3">
+                            <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} disabled={isAccountFrozen} placeholder="Type a message..." className="flex-grow w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50" />
+                            <button type="submit" disabled={!newMessage.trim() || isAccountFrozen} className="p-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-full transition-transform transform hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70 disabled:scale-100"><PaperAirplaneIcon className="w-6 h-6" /></button>
+                        </form>
+                    </footer>
+                </>
+            ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                    <button onClick={() => setIsMobileSidebarOpen(true)} className="md:hidden absolute top-4 left-4 p-2 text-slate-400 hover:text-white"><ChatBubbleLeftRightIcon className="w-6 h-6" /></button>
+                    <ChatBubbleLeftRightIcon className="w-24 h-24 text-slate-700 mb-4" />
+                    <h2 className="text-3xl font-bold">Welcome to BAK -Ko</h2>
+                    <p className="text-slate-400 mt-2">Select a chat to start messaging.</p>
+                </div>
+            )}
+        </main>
+    );
+};
+
 const ChatRoom: React.FC<ChatRoomProps> = (props) => {
-    const { currentUser, users, chats, messages, connections, transactions, loggedInUsers, onSendMessage, onCreateChat, onCreateGroupChat, onLogout, onSwitchUser, onLogin, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, onReportUser, onDeleteUserChats } = props;
+    const { currentUser, users, chats, messages, connections, transactions, onSendMessage, onCreateChat, onLogout, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, onReportUser, onDeleteUserChats } = props;
     
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [newMessage, setNewMessage] = useState('');
@@ -708,158 +898,6 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
             }
         }
     };
-    
-    const Sidebar = () => (
-        <aside className={`absolute md:relative z-20 w-80 md:w-96 h-full bg-black/20 backdrop-blur-2xl border-r border-white/10 flex-shrink-0 flex flex-col transition-transform duration-300 ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-            <div className="p-4 border-b border-white/10 flex-shrink-0">
-                <div className="flex items-center gap-3">
-                    <button onClick={() => setIsProfileModalOpen(true)}>
-                        <AvatarWithBorder user={currentUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" />
-                    </button>
-                    <div className="flex-grow overflow-hidden">
-                        <div className="flex items-center gap-1.5"><UserName user={currentUser} className="font-bold text-lg truncate" />{renderUserBadge(currentUser)}</div>
-                        <p className="text-sm text-slate-400 truncate">{currentUser.bio || "No bio set"}</p>
-                    </div>
-                    <button onClick={onLogout} className="p-2 text-slate-400 hover:text-white transition-colors flex-shrink-0"><ArrowLeftOnRectangleIcon className="w-6 h-6" /></button>
-                </div>
-            </div>
-
-            <div className="p-4 flex-shrink-0">
-                <div className="relative">
-                    <MagnifyingGlassIcon className="w-5 h-5 absolute top-1/2 -translate-y-1/2 left-4 text-slate-400" />
-                    <input type="text" placeholder="Search..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-white/5 border border-transparent rounded-full pl-11 pr-4 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500/50" />
-                </div>
-            </div>
-            
-            <div className="px-4 pb-2 border-b border-white/10 flex-shrink-0">
-                <nav className="flex justify-between items-center">
-                    <div className="flex space-x-1 bg-black/20 p-1 rounded-full">
-                        <button onClick={() => setSidebarView('chats')} className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'chats' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Chats</button>
-                        <button onClick={() => setSidebarView('users')} className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'users' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Users</button>
-                        <button onClick={() => setSidebarView('requests')} className={`relative px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'requests' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>
-                            Requests {friendRequests.length > 0 && <span className="absolute -top-1 -right-1 h-4 w-4 text-xs bg-red-500 rounded-full">{friendRequests.length}</span>}
-                        </button>
-                    </div>
-                     {sidebarView === 'chats' && (
-                        <button onClick={() => setIsMultiDeleteMode(p => !p)} className={`p-2 rounded-full transition-colors ${isMultiDeleteMode ? 'bg-red-500/20 text-red-300' : 'text-slate-400 hover:bg-white/10'}`}>
-                           <TrashIcon className="w-5 h-5" />
-                        </button>
-                    )}
-                </nav>
-            </div>
-            
-            <div className="flex-grow overflow-y-auto custom-scrollbar">
-                {sidebarView === 'chats' && (
-                    <div className="p-2 space-y-1">
-                        {filteredChats.map(chat => {
-                            const otherUserId = chat.members.find(id => id !== currentUser.id);
-                            const otherUser = users.find(u => u.id === otherUserId);
-                            return (
-                                <div key={chat.id} onClick={() => handleSelectChat(chat.id)} className={`flex items-center gap-3 p-3 rounded-2xl cursor-pointer transition-colors ${activeChatId === chat.id && !isMultiDeleteMode ? 'bg-cyan-500/20' : 'hover:bg-white/5'}`}>
-                                    {isMultiDeleteMode && (
-                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 flex-shrink-0 ${chatsToDelete.includes(chat.id) ? 'bg-cyan-500 border-cyan-400' : 'border-slate-500 bg-white/10'}`}>
-                                            {chatsToDelete.includes(chat.id) && <CheckIcon className="w-3 h-3 text-white" />}
-                                        </div>
-                                    )}
-                                    {chat.type === 'dm' && otherUser ? <AvatarWithBorder user={otherUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" /> : <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0"><UsersIcon className="w-7 h-7"/></div> }
-                                    <div className="flex-grow overflow-hidden">
-                                        <p className="font-semibold truncate">{getChatDisplayName(chat, currentUser, users)}</p>
-                                        <p className="text-sm text-slate-400 truncate">{chat.lastMessage?.text || "No messages yet"}</p>
-                                    </div>
-                                    {chat.lastMessage && <span className="text-xs text-slate-500 self-start">{new Date(chat.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit'})}</span>}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-                {sidebarView === 'users' && (
-                    <div className="p-2 space-y-1">
-                        {filteredUsers.map(user => {
-                            const connection = connections.find(c => (c.fromUserId === currentUser.id && c.toUserId === user.id) || (c.fromUserId === user.id && c.toUserId === currentUser.id));
-                            return (
-                                <div key={user.id} className="flex items-center gap-3 p-3 rounded-2xl">
-                                    <AvatarWithBorder user={user} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" />
-                                    <div className="flex-grow overflow-hidden"><div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold truncate" />{renderUserBadge(user)}</div></div>
-                                    {(!connection || connection.status === ConnectionStatus.REJECTED) && <button onClick={() => onSendRequest(user.id)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20"><UserPlusIcon className="w-5 h-5"/></button>}
-                                    {connection?.status === ConnectionStatus.PENDING && <span className="text-xs text-amber-400 font-semibold">Pending</span>}
-                                    {connection?.status === ConnectionStatus.ACCEPTED && <button onClick={() => handleCreateNewChat(user)} className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20"><ChatBubbleLeftRightIcon className="w-5 h-5"/></button>}
-                                    {connection?.status === ConnectionStatus.BLOCKED && <span className="text-xs text-red-400 font-semibold">Blocked</span>}
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-                {sidebarView === 'requests' && (
-                    <div className="p-2 space-y-1">
-                        {friendRequests.map(req => {
-                            const fromUser = users.find(u => u.id === req.fromUserId);
-                            if (!fromUser) return null;
-                            return (
-                                <div key={req.id} className="flex items-center gap-3 p-3 rounded-2xl">
-                                    <AvatarWithBorder user={fromUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" />
-                                    <div className="flex-grow overflow-hidden"><div className="flex items-center gap-1.5"><UserName user={fromUser} className="font-semibold truncate" />{renderUserBadge(fromUser)}</div></div>
-                                    <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.REJECTED)} className="p-2 bg-red-500/20 text-red-300 rounded-full hover:bg-red-500/30"><XMarkIcon className="w-5 h-5"/></button>
-                                    <button onClick={() => onUpdateConnection(req.id, ConnectionStatus.ACCEPTED)} className="p-2 bg-green-500/20 text-green-300 rounded-full hover:bg-green-500/30"><CheckIcon className="w-5 h-5" /></button>
-                                </div>
-                            );
-                        })}
-                    </div>
-                )}
-            </div>
-            {isMultiDeleteMode && (
-                <div className="p-4 border-t border-white/10 flex items-center justify-between">
-                    <span className="text-sm font-semibold">{chatsToDelete.length} selected</span>
-                    <button onClick={handleDeleteSelectedChats} disabled={chatsToDelete.length === 0} className="px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-sm disabled:opacity-50">Delete</button>
-                </div>
-            )}
-        </aside>
-    );
-
-    const MainContent = () => {
-        const otherUser = activeChat?.type === ChatType.DM ? users.find(u => u.id === activeChat.members.find(id => id !== currentUser.id)) : null;
-        
-        return (
-            <main className="flex-1 flex flex-col bg-black/10">
-                {activeChat ? (
-                    <>
-                        <header className="p-4 border-b border-white/10 flex items-center gap-4 flex-shrink-0 bg-black/10 backdrop-blur-2xl z-10">
-                            <button onClick={() => setIsMobileSidebarOpen(true)} className="md:hidden p-2 text-slate-400 hover:text-white"><ChatBubbleLeftRightIcon className="w-6 h-6" /></button>
-                            {activeChat.type === 'dm' && otherUser ? <AvatarWithBorder user={otherUser} containerClasses="w-12 h-12" textClasses="text-2xl" statusClasses="h-3.5 w-3.5 bottom-0 right-0" /> : <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-blue-600 flex items-center justify-center text-xl font-bold flex-shrink-0"><UsersIcon className="w-7 h-7"/></div> }
-                            <div className="flex-grow">
-                                <div className="flex items-center gap-2"><p className="text-xl font-bold">{getChatDisplayName(activeChat, currentUser, users)}</p>{otherUser && renderUserBadge(otherUser, 'large')}</div>
-                                {otherUser?.online && <p className="text-sm text-green-400">Online</p>}
-                            </div>
-                            {otherUser && <button onClick={() => openReportModal(otherUser)} title="Report User" className="p-2 text-slate-400 hover:text-red-400"><FlagIcon className="w-6 h-6"/></button>}
-                        </header>
-                        <div className="flex-grow p-6 overflow-y-auto space-y-6 custom-scrollbar">
-                            {chatMessages.map(msg => {
-                                const author = users.find(u => u.id === msg.authorId);
-                                if (!author) return null;
-                                return <ChatMessage key={msg.id} message={msg} author={author} isCurrentUser={author.id === currentUser.id} isGroupChat={activeChat.type === ChatType.GROUP} />;
-                            })}
-                            <div ref={messagesEndRef} />
-                        </div>
-                        <footer className="p-4 flex-shrink-0">
-                            {isAccountFrozen && (
-                                <div className="text-center p-3 mb-2 bg-red-500/10 text-red-300 rounded-lg text-sm">Your account is frozen. You cannot send messages.</div>
-                            )}
-                            <form onSubmit={handleSendMessageSubmit} className="flex items-center gap-3">
-                                <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} disabled={isAccountFrozen} placeholder="Type a message..." className="flex-grow w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50" />
-                                <button type="submit" disabled={!newMessage.trim() || isAccountFrozen} className="p-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-full transition-transform transform hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70 disabled:scale-100"><PaperAirplaneIcon className="w-6 h-6" /></button>
-                            </form>
-                        </footer>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                        <button onClick={() => setIsMobileSidebarOpen(true)} className="md:hidden absolute top-4 left-4 p-2 text-slate-400 hover:text-white"><ChatBubbleLeftRightIcon className="w-6 h-6" /></button>
-                        <ChatBubbleLeftRightIcon className="w-24 h-24 text-slate-700 mb-4" />
-                        <h2 className="text-3xl font-bold">Welcome to BAK -Ko</h2>
-                        <p className="text-slate-400 mt-2">Select a chat to start messaging.</p>
-                    </div>
-                )}
-            </main>
-        );
-    };
 
     return (
         <>
@@ -889,8 +927,43 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 </form>
             </Modal>
             <div className="flex h-screen w-full font-sans overflow-hidden animated-gradient">
-                <Sidebar />
-                <MainContent />
+                <Sidebar
+                    currentUser={currentUser}
+                    setIsProfileModalOpen={setIsProfileModalOpen}
+                    onLogout={onLogout}
+                    searchTerm={searchTerm}
+                    setSearchTerm={setSearchTerm}
+                    sidebarView={sidebarView}
+                    setSidebarView={setSidebarView}
+                    friendRequests={friendRequests}
+                    isMultiDeleteMode={isMultiDeleteMode}
+                    setIsMultiDeleteMode={setIsMultiDeleteMode}
+                    isMobileSidebarOpen={isMobileSidebarOpen}
+                    filteredChats={filteredChats}
+                    activeChatId={activeChatId}
+                    handleSelectChat={handleSelectChat}
+                    chatsToDelete={chatsToDelete}
+                    users={users}
+                    filteredUsers={filteredUsers}
+                    connections={connections}
+                    onSendRequest={onSendRequest}
+                    handleCreateNewChat={handleCreateNewChat}
+                    onUpdateConnection={onUpdateConnection}
+                    handleDeleteSelectedChats={handleDeleteSelectedChats}
+                />
+                <ChatArea
+                    activeChat={activeChat}
+                    currentUser={currentUser}
+                    users={users}
+                    chatMessages={chatMessages}
+                    messagesEndRef={messagesEndRef}
+                    isAccountFrozen={isAccountFrozen}
+                    newMessage={newMessage}
+                    setNewMessage={setNewMessage}
+                    handleSendMessageSubmit={handleSendMessageSubmit}
+                    setIsMobileSidebarOpen={setIsMobileSidebarOpen}
+                    openReportModal={openReportModal}
+                />
             </div>
         </>
     );
