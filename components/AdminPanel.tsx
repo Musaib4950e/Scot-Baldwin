@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report } from '../types';
 import { db, MARKETPLACE_ITEMS } from './db';
@@ -106,7 +107,7 @@ const formatCurrency = (amount: number | null | undefined) => {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
 };
 
-const AdminPanel: React.FC<AdminPanelProps> = (props) => {
+export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const { currentUser, users, chats, messages, connections, transactions, reports, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification, onAdminGrantFunds, onAdminUpdateUserFreezeStatus, onUpdateReportStatus } = props;
     
     const [view, setView] = useState<'dashboard' |'users' | 'groups' | 'requests' | 'verification' | 'transactions' | 'wallets' | 'reports' | 'announcements'>('dashboard');
@@ -348,4 +349,350 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     {view === 'dashboard' && (
                         <div>
                              <h1 className="text-4xl font-bold mb-8 text-white">Dashboard</h1>
-                             <div className="grid grid-cols-1 md
+                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-blue-500/20 rounded-lg"><UsersIcon className="w-6 h-6 text-blue-300"/></div>
+                                        <div>
+                                            <p className="text-slate-400 text-sm font-medium">Total Users</p>
+                                            <p className="text-3xl font-bold text-white">{stats.totalUsers}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-green-500/20 rounded-lg"><CheckCircleIcon className="w-6 h-6 text-green-300"/></div>
+                                        <div>
+                                            <p className="text-slate-400 text-sm font-medium">Online Users</p>
+                                            <p className="text-3xl font-bold text-white">{stats.onlineUsers}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-purple-500/20 rounded-lg"><CurrencyDollarIcon className="w-6 h-6 text-purple-300"/></div>
+                                        <div>
+                                            <p className="text-slate-400 text-sm font-medium">Total Volume</p>
+                                            <p className="text-3xl font-bold text-white">{formatCurrency(stats.totalVolume)}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/10">
+                                    <div className="flex items-center gap-4">
+                                        <div className="p-3 bg-cyan-500/20 rounded-lg"><ShoppingCartIcon className="w-6 h-6 text-cyan-300"/></div>
+                                        <div>
+                                            <p className="text-slate-400 text-sm font-medium">Transactions</p>
+                                            <p className="text-3xl font-bold text-white">{stats.totalTransactions}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                             </div>
+                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/10">
+                                    <h2 className="text-xl font-bold mb-4">User Registrations (Last 7 Days)</h2>
+                                    <div className="flex justify-between items-end h-48 gap-2">
+                                        {stats.registrationsChart.data.map((value, index) => {
+                                            const maxVal = Math.max(...stats.registrationsChart.data, 1);
+                                            const height = `${(value / maxVal) * 100}%`;
+                                            return (
+                                                <div key={index} className="flex-1 flex flex-col items-center justify-end gap-2">
+                                                    <div className="text-sm font-bold">{value}</div>
+                                                    <div className="w-full bg-gradient-to-t from-blue-500 to-cyan-400 rounded-t-md" style={{ height }}></div>
+                                                    <div className="text-xs text-slate-400">{stats.registrationsChart.labels[index]}</div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                <div className="bg-black/20 p-6 rounded-2xl border border-white/10">
+                                    <h2 className="text-xl font-bold mb-4">Messages Sent (Last 7 Days)</h2>
+                                    <div className="flex justify-between items-end h-48 gap-2">
+                                        {stats.messagesChart.data.map((value, index) => {
+                                            const maxVal = Math.max(...stats.messagesChart.data, 1);
+                                            const height = `${(value / maxVal) * 100}%`;
+                                            return (
+                                                <div key={index} className="flex-1 flex flex-col items-center justify-end gap-2">
+                                                    <div className="text-sm font-bold">{value}</div>
+                                                    <div className="w-full bg-gradient-to-t from-purple-500 to-pink-500 rounded-t-md" style={{ height }}></div>
+                                                    <div className="text-xs text-slate-400">{stats.messagesChart.labels[index]}</div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="bg-black/20 p-6 rounded-2xl border border-white/10">
+                                <h2 className="text-xl font-bold mb-4">Most Active Groups</h2>
+                                <div className="space-y-3">
+                                    {stats.activeGroups.map((group, index) => (
+                                        <div key={index} className="flex justify-between items-center text-sm">
+                                            <p className="font-semibold">{group.name}</p>
+                                            <p className="text-slate-400">{group.count} messages</p>
+                                        </div>
+                                    ))}
+                                    {stats.activeGroups.length === 0 && <p className="text-slate-500 text-center">No group activity yet.</p>}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'users' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">User Management</h1>
+                            <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-white/5 border-b border-white/10">
+                                        <tr>
+                                            <th className="p-4 font-semibold">User</th>
+                                            <th className="p-4 font-semibold">Status</th>
+                                            <th className="p-4 font-semibold">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {users.filter(u => !u.isAdmin).map(user => (
+                                            <tr key={user.id} className="border-b border-white/10 last:border-b-0">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-lg" />
+                                                        <div>
+                                                            <div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold" />{renderUserBadge(user)}</div>
+                                                            <p className="text-xs text-slate-400">{user.id}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 text-sm">
+                                                    {user.isFrozen ? <span className="flex items-center gap-1.5 text-red-400"><BanIcon className="w-4 h-4" />Frozen</span> : (user.online ? <span className="flex items-center gap-1.5 text-green-400"><div className="w-2 h-2 bg-green-400 rounded-full"></div>Online</span> : <span className="flex items-center gap-1.5 text-slate-400"><div className="w-2 h-2 bg-slate-500 rounded-full"></div>Offline</span>)}
+                                                </td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => openEditUserModal(user)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Edit Profile"><PencilIcon className="w-4 h-4"/></button>
+                                                        <button onClick={() => openPasswordModal(user)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Reset Password"><KeyIcon className="w-4 h-4"/></button>
+                                                        <button onClick={() => openVerificationModal(user)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Manage Verification"><CheckBadgeIcon className="w-4 h-4"/></button>
+                                                        <button onClick={() => user.isFrozen ? handleUnfreeze(user.id) : openFreezeModal(user)} className={`p-2 rounded-md ${user.isFrozen ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-white'}`} title={user.isFrozen ? 'Unfreeze Account' : 'Freeze Account'}><BanIcon className="w-4 h-4"/></button>
+                                                        <button onClick={() => handleDeleteUserConfirm(user)} className="p-2 bg-red-500/20 rounded-md text-red-300 hover:bg-red-500/30" title="Delete User"><TrashIcon className="w-4 h-4"/></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                     {view === 'wallets' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">User Wallets</h1>
+                            <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-white/5 border-b border-white/10">
+                                        <tr>
+                                            <th className="p-4 font-semibold">User</th>
+                                            <th className="p-4 font-semibold">Balance</th>
+                                            <th className="p-4 font-semibold">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {users.filter(u => !u.isAdmin).map(user => (
+                                            <tr key={user.id} className="border-b border-white/10 last:border-b-0">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-lg" />
+                                                        <div>
+                                                            <div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold" />{renderUserBadge(user)}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 font-semibold text-lg">{formatCurrency(user.walletBalance)}</td>
+                                                <td className="p-4">
+                                                    <button onClick={() => openGrantModal(user)} className="px-3 py-1.5 bg-green-500/20 text-green-300 text-sm font-semibold rounded-md hover:bg-green-500/30">Grant Funds</button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'groups' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Group Management</h1>
+                            <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-white/5 border-b border-white/10">
+                                        <tr>
+                                            <th className="p-4 font-semibold">Group Name</th>
+                                            <th className="p-4 font-semibold">Members</th>
+                                            <th className="p-4 font-semibold">Privacy</th>
+                                            <th className="p-4 font-semibold">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {chats.filter(c => c.type === ChatType.GROUP).map(group => (
+                                            <tr key={group.id} className="border-b border-white/10 last:border-b-0">
+                                                <td className="p-4 font-semibold">{group.name}</td>
+                                                <td className="p-4">{group.members.length}</td>
+                                                <td className="p-4">{group.password ? <span className="flex items-center gap-1.5 text-xs font-semibold text-amber-300"><LockOpenIcon className="w-4 h-4" />Password Protected</span> : <span className="text-xs text-slate-400">Public</span>}</td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => setViewingGroupChat(group)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="View Chat"><EyeIcon className="w-4 h-4"/></button>
+                                                        <button onClick={() => openEditGroupModal(group)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Edit Group"><PencilIcon className="w-4 h-4"/></button>
+                                                        <button onClick={() => handleDeleteGroupConfirm(group)} className="p-2 bg-red-500/20 rounded-md text-red-300 hover:bg-red-500/30" title="Delete Group"><TrashIcon className="w-4 h-4"/></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'requests' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Connection Requests</h1>
+                             <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-white/5 border-b border-white/10">
+                                        <tr>
+                                            <th className="p-4 font-semibold">From</th>
+                                            <th className="p-4 font-semibold">To</th>
+                                            <th className="p-4 font-semibold">Status</th>
+                                            <th className="p-4 font-semibold">Date</th>
+                                            <th className="p-4 font-semibold">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {connections.map(conn => {
+                                            const fromUser = users.find(u => u.id === conn.fromUserId);
+                                            const toUser = users.find(u => u.id === conn.toUserId);
+                                            return (
+                                            <tr key={conn.id} className="border-b border-white/10 last:border-b-0">
+                                                <td className="p-4 font-semibold">{fromUser?.username || 'N/A'}</td>
+                                                <td className="p-4 font-semibold">{toUser?.username || 'N/A'}</td>
+                                                <td className="p-4 text-sm font-semibold capitalize" style={{color: conn.status === 'accepted' ? '#4ade80' : conn.status === 'pending' ? '#facc15' : '#f87171'}}>{conn.status}</td>
+                                                <td className="p-4 text-sm text-slate-400">{new Date(conn.requestedAt).toLocaleDateString()}</td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                         {conn.status === 'pending' && <button onClick={() => onUpdateConnection(conn.id, ConnectionStatus.ACCEPTED)} className="p-2 bg-green-500/20 rounded-md text-green-300" title="Accept"><CheckCircleIcon className="w-4 h-4"/></button>}
+                                                         {conn.status === 'pending' && <button onClick={() => onUpdateConnection(conn.id, ConnectionStatus.REJECTED)} className="p-2 bg-red-500/20 rounded-md text-red-300" title="Reject"><XMarkIcon className="w-4 h-4"/></button>}
+                                                         <button onClick={() => onDeleteConnection(conn.id)} className="p-2 bg-red-500/20 rounded-md text-red-300 hover:bg-red-500/30" title="Delete Connection"><TrashIcon className="w-4 h-4"/></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )})}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'verification' && (
+                         <div>
+                            <h1 className="text-4xl font-bold mb-4 text-white">Verification Management</h1>
+                             <div className="flex border-b border-white/10 mb-6">
+                                <button onClick={() => setVerificationTab('manage')} className={`px-4 py-2 text-sm font-semibold ${verificationTab === 'manage' ? 'border-b-2 border-blue-400 text-white' : 'text-slate-400'}`}>Manage</button>
+                                <button onClick={() => setVerificationTab('requests')} className={`relative px-4 py-2 text-sm font-semibold ${verificationTab === 'requests' ? 'border-b-2 border-blue-400 text-white' : 'text-slate-400'}`}>Requests {verificationRequests.length > 0 && <span className="absolute top-1 right-1 h-4 w-4 bg-red-500 text-xs rounded-full">{verificationRequests.length}</span>}</button>
+                            </div>
+                             <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-white/5 border-b border-white/10">
+                                        <tr>
+                                            <th className="p-4 font-semibold">User</th>
+                                            <th className="p-4 font-semibold">Status</th>
+                                            <th className="p-4 font-semibold">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {(verificationTab === 'manage' ? users.filter(u => !u.isAdmin) : verificationRequests).map(user => (
+                                            <tr key={user.id} className="border-b border-white/10 last:border-b-0">
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-lg" />
+                                                        <div><UserName user={user} className="font-semibold" /></div>
+                                                    </div>
+                                                </td>
+                                                <td className="p-4 font-semibold text-sm">{getVerificationStatusText(user)}</td>
+                                                <td className="p-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={() => openVerificationModal(user)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Update Verification"><CheckBadgeIcon className="w-4 h-4"/></button>
+                                                        {user.verification?.status === 'approved' && <button onClick={() => handleVerificationRevoke()} className="p-2 bg-red-500/20 rounded-md text-red-300 hover:bg-red-500/30" title="Revoke Badge"><BanIcon className="w-4 h-4"/></button>}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'reports' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">User Reports</h1>
+                            <div className="space-y-4">
+                                {reports.sort((a,b) => b.timestamp - a.timestamp).map(report => {
+                                    const reporter = users.find(u => u.id === report.reporterId);
+                                    const reported = users.find(u => u.id === report.reportedUserId);
+                                    return (
+                                        <div key={report.id} className="bg-black/20 p-4 rounded-xl border border-white/10">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p><span className="font-semibold">{reporter?.username || 'Unknown'}</span> reported <span className="font-semibold">{reported?.username || 'Unknown'}</span></p>
+                                                    <p className="text-xs text-slate-400">{new Date(report.timestamp).toLocaleString()}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <select value={report.status} onChange={(e) => onUpdateReportStatus(report.id, e.target.value as Report['status'])} className="bg-white/10 text-xs font-semibold rounded-md py-1 px-2 border border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                                        <option value="pending">Pending</option>
+                                                        <option value="resolved">Resolved</option>
+                                                        <option value="dismissed">Dismissed</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <p className="mt-2 p-3 bg-black/20 rounded-lg text-sm whitespace-pre-wrap">{report.reason}</p>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+                    {view === 'transactions' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Transaction Log</h1>
+                            <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden">
+                                <table className="w-full text-left">
+                                    <thead className="bg-white/5 border-b border-white/10">
+                                        <tr><th className="p-4 font-semibold">Date</th><th className="p-4 font-semibold">Description</th><th className="p-4 font-semibold text-right">Amount</th></tr>
+                                    </thead>
+                                    <tbody>
+                                        {transactions.sort((a,b) => b.timestamp - a.timestamp).map(t => (
+                                            <tr key={t.id} className="border-b border-white/10 last:border-b-0 text-sm">
+                                                <td className="p-4 text-slate-400">{new Date(t.timestamp).toLocaleString()}</td>
+                                                <td className="p-4">{t.description}</td>
+                                                <td className="p-4 text-right font-semibold font-mono">{formatCurrency(t.amount)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                    {view === 'announcements' && (
+                        <div>
+                            <h1 className="text-4xl font-bold mb-8 text-white">Broadcast Announcement</h1>
+                            <div className="bg-black/20 p-6 rounded-2xl border border-white/10 space-y-4">
+                                <div>
+                                    <label htmlFor="broadcast" className="block text-sm font-medium text-slate-300 mb-1">Message</label>
+                                    <textarea id="broadcast" value={broadcastMessage} onChange={e => setBroadcastMessage(e.target.value)} rows={5} className="w-full bg-white/5 border border-white/10 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                                </div>
+                                <button onClick={handleBroadcast} disabled={isBroadcasting || !broadcastMessage.trim()} className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg font-semibold disabled:opacity-50">{isBroadcasting ? 'Sending...' : 'Send to All Users'}</button>
+                            </div>
+                             <h2 className="text-2xl font-bold mt-8 mb-4 text-white">Previous Announcements</h2>
+                             <div className="space-y-4">
+                                {announcements.map(ann => <ChatMessage key={ann.id} message={ann} author={currentUser} isCurrentUser={false} isGroupChat={false} />)}
+                            </div>
+                        </div>
+                    )}
+                </main>
+            </div>
+            {/* Modals */}
+        </>
+    );
+}
+// Health check comment
+// N
