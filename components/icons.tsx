@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const LockClosedIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
@@ -195,7 +196,16 @@ export const ShoppingCartIcon: React.FC<{ className?: string }> = ({ className =
     </svg>
 );
 
+// FIX: Added missing ChatBubbleLeftRightIcon component
+export const ChatBubbleLeftRightIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+      <path fillRule="evenodd" d="M4.804 21.644A6.707 6.707 0 006 21.75a6.75 6.75 0 006.75-6.75v-2.502a6.75 6.75 0 00-6.75-6.75H6a6.75 6.75 0 00-6.75 6.75v1.252a6.707 6.707 0 001.054 3.543l2.25-2.25a.75.75 0 011.06 1.06l-2.25 2.25zm10.272-1.06a.75.75 0 010-1.06l2.25-2.25a6.707 6.707 0 001.054-3.543V12a6.75 6.75 0 00-6.75-6.75h-.196a6.75 6.75 0 00-6.75 6.75v2.501a6.75 6.75 0 006.75 6.75h.196a6.707 6.707 0 003.543-1.054l2.25 2.25a.75.75 0 011.06 0z" clipRule="evenodd" />
+    </svg>
+);
+
 export const CurrencyDollarIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
       <path d="M12 7.5a2.25 2.25 0 100 4.5 2.25 2.25 0 000-4.5z" />
-      <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h15a3 3 0 013 3v15a3 3 0 01-3 3h-15a3 3 0 01-3-3V4.5zM8.25 9a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM12 15a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-3a.75.75 0
+      <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h15a3 3 0 013 3v15a3 3 0 01-3 3h-15a3 3 0 01-3-3V4.5zM8.25 9a3.75 3.75 0 117.5 0 3.75 3.75 0 01-7.5 0zM12 15a.75.75 0 01.75.75v.008c0 .414.336.75.75.75h.008a.75.75 0 01.75.75v.008a.75.75 0 01-.75.75h-3a.75.75 0" />
+    </svg>
+);

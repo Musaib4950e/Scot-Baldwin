@@ -2,7 +2,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction } from '../types';
 import { db } from './db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon } from './icons';
+// FIX: Added missing CheckCircleIcon to imports
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 
@@ -398,7 +399,8 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                                         break;
                                                     default:
                                                         typeIcon = null;
-                                                        typeText = t.type.replace('_', ' ');
+                                                        {/* FIX: Cast t.type to string to avoid 'never' type error due to exhaustive switch */}
+                                                        typeText = (t.type as string).replace(/_/g, ' ');
                                                         fromText = fromUser?.username || t.fromUserId;
                                                         toText = toUser?.username || t.toUserId;
                                                 }
