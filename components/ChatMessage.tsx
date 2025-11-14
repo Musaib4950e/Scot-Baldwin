@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Message, User } from '../types';
+import type { Message, User, VerificationBadgeType } from '../types';
 import { CheckBadgeIcon, MegaphoneIcon } from './icons';
 
 interface ChatMessageProps {
@@ -41,13 +41,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, author, isCurrentUse
     if (user?.verification?.status !== 'approved') return null;
     if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null; // Expired
 
-    const colorClasses = {
+    if (user.verification.badgeType === 'aurora') {
+      return <CheckBadgeIcon className="w-3.5 h-3.5 aurora-badge" />;
+    }
+
+    const colorClasses: Record<VerificationBadgeType, string> = {
         blue: 'text-blue-400',
         red: 'text-red-400',
         gold: 'text-amber-400',
         pink: 'text-pink-400',
         grey: 'text-slate-400',
         pastel_blue: 'text-sky-300',
+        aurora: 'aurora-badge'
     };
     
     const badgeColor = colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';

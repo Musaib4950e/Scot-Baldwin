@@ -1,4 +1,3 @@
-
 import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, TransactionType } from '../types';
 
 const DB_NAME = 'bakko-db';
@@ -103,7 +102,7 @@ class Database {
             isAdmin: true,
             verification: {
                 status: 'approved',
-                badgeType: 'gold',
+                badgeType: 'aurora',
             },
             bio: 'The administrator of BAK-Ko.',
             walletBalance: 999999999,

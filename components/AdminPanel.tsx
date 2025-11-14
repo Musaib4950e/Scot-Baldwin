@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction } from '../types';
 import { db } from './db';
@@ -7,7 +6,7 @@ import ChatMessage from './ChatMessage';
 
 // Helper component for the visual badge selector
 const BadgeOption: React.FC<{ badge: VerificationBadgeType | 'none' }> = ({ badge }) => {
-    const badgeDetails: Record<VerificationBadgeType | 'none', { color: string, name: string }> = {
+    const badgeDetails: Record<VerificationBadgeType | 'none', { color: string, name: string, isGradient?: boolean }> = {
         none: { color: 'text-slate-400', name: 'None (Revoke)' },
         blue: { color: 'text-blue-400', name: 'Blue' },
         red: { color: 'text-red-400', name: 'Red' },
@@ -15,9 +14,10 @@ const BadgeOption: React.FC<{ badge: VerificationBadgeType | 'none' }> = ({ badg
         pink: { color: 'text-pink-400', name: 'Pink' },
         grey: { color: 'text-slate-400', name: 'Grey' },
         pastel_blue: { color: 'text-sky-300', name: 'Pastel Blue' },
+        aurora: { color: 'aurora-badge', name: 'Aurora (Admin)', isGradient: true },
     };
 
-    const { color, name } = badgeDetails[badge];
+    const { color, name, isGradient } = badgeDetails[badge];
 
     return (
         <div className="flex items-center gap-3">
@@ -26,7 +26,7 @@ const BadgeOption: React.FC<{ badge: VerificationBadgeType | 'none' }> = ({ badg
             ) : (
                 <CheckBadgeIcon className={`w-5 h-5 ${color}`} />
             )}
-            <span className="font-semibold text-white">{name}</span>
+            <span className={`font-semibold ${isGradient ? color : 'text-white'}`}>{name}</span>
         </div>
     );
 };
@@ -58,13 +58,18 @@ const renderUserBadge = (user: User) => {
     if (user?.verification?.status !== 'approved') return null;
     if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null;
 
-    const colorClasses = {
+    if (user.verification.badgeType === 'aurora') {
+        return <CheckBadgeIcon className="w-5 h-5 aurora-badge flex-shrink-0" />;
+    }
+
+    const colorClasses: Record<VerificationBadgeType, string> = {
         blue: 'text-blue-400',
         red: 'text-red-400',
         gold: 'text-amber-400',
         pink: 'text-pink-400',
         grey: 'text-slate-400',
         pastel_blue: 'text-sky-300',
+        aurora: 'aurora-badge',
     };
     const badgeColor = colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
     return <CheckBadgeIcon className={`w-5 h-5 ${badgeColor} flex-shrink-0`} />;
@@ -262,7 +267,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             if (isExpired) {
                 return "Expired";
             }
-            const badgeName = verification.badgeType ? verification.badgeType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Blue';
+            const badgeName = verification.badgeType ? verification.badgeType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Blue';
             return `Verified (${badgeName})`;
         }
         if (verification?.status === 'pending') {
@@ -572,7 +577,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                     </button>
                                     {isBadgeSelectorOpen && (
                                         <div className="absolute top-full mt-2 w-full bg-slate-900/80 backdrop-blur-xl border border-white/10 rounded-lg shadow-2xl z-20 p-1 space-y-1">
-                                            {(['none', 'blue', 'red', 'pink', 'gold', 'grey', 'pastel_blue'] as const).map(b => (
+                                            {(['none', 'blue', 'red', 'pink', 'gold', 'grey', 'pastel_blue', 'aurora'] as const).map(b => (
                                                 <button
                                                     type="button"
                                                     key={b}

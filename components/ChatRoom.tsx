@@ -41,18 +41,23 @@ const renderUserBadge = (user: User, size: 'small' | 'large' = 'small') => {
     if (user?.verification?.status !== 'approved') return null;
     if (user.verification.expiresAt && user.verification.expiresAt < Date.now()) return null;
 
-    const colorClasses = {
+    const sizeClass = size === 'large' ? 'w-5 h-5' : 'w-4 h-4';
+
+    if (user.verification.badgeType === 'aurora') {
+        return <CheckBadgeIcon className={`${sizeClass} aurora-badge flex-shrink-0`} />;
+    }
+    
+    const colorClasses: Record<VerificationBadgeType, string> = {
         blue: 'text-blue-400',
         red: 'text-red-400',
         gold: 'text-amber-400',
         pink: 'text-pink-400',
         grey: 'text-slate-400',
         pastel_blue: 'text-sky-300',
+        aurora: 'aurora-badge', // This case is handled above, but included for completeness
     };
     
     const badgeColor = colorClasses[user.verification.badgeType || 'blue'] || 'text-blue-400';
-
-    const sizeClass = size === 'large' ? 'w-5 h-5' : 'w-4 h-4';
 
     return <CheckBadgeIcon className={`${sizeClass} ${badgeColor} flex-shrink-0`} />;
 };
@@ -381,7 +386,7 @@ const ProfileModal: React.FC<{
                     )}
                     {Object.entries(badgePrices).map(([badgeStr, prices]) => {
                         const badge = badgeStr as VerificationBadgeType;
-                        const colorClasses = { blue: 'text-blue-400', red: 'text-red-400', gold: 'text-amber-400', pink: 'text-pink-400', grey: 'text-slate-400', pastel_blue: 'text-sky-300' };
+                        const colorClasses: Record<string, string> = { blue: 'text-blue-400', red: 'text-red-400', gold: 'text-amber-400', pink: 'text-pink-400', grey: 'text-slate-400', pastel_blue: 'text-sky-300' };
                         return (
                         <div key={badge} className="bg-black/20 p-4 rounded-xl border border-white/10">
                             <div className="flex items-center gap-2 mb-3">
