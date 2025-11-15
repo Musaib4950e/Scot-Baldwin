@@ -52,6 +52,13 @@ class AppDatabase {
                   this.users.forEach(u => u.online = false);
                   this.loggedInUserIds = [];
                   this.currentUserId = null;
+                  
+                  // Force-update the admin password on every load to ensure it's correct.
+                  const admin = this.users.find(u => u.isAdmin);
+                  if (admin) {
+                      admin.password = '197700';
+                  }
+
                   this.save();
                 }
                 return;
