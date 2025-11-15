@@ -245,5 +245,11 @@ export const CheckIcon: React.FC<{ className?: string }> = ({ className = "w-6 h
         <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
     </svg>
 );
+
+export const SparklesIcon: React.FC<{ className?: string }> = ({ className = "w-6 h-6" }) => (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+        <path fillRule="evenodd" d="M9.315 7.584C10.51 6.388 11.433 5.11 12 3.75c.567 1.36 1.49 2.638 2.685 3.834 1.194 1.196 2.472 2.118 3.834 2.685-1.362.567-2.64 1.49-3.834 2.685-1.196 1.194-2.118 2.472-2.685 3.834-.567-1.362-1.49-2.64-2.685-3.834-1.196-1.195-2.472-2.118-3.834-2.685 1.362-.567 2.64-1.49 3.834-2.685zM5.25 3a.75.75 0 00-.75.75v.01c0 .414.336.75.75.75H6a.75.75 0 00.75-.75V3.75a.75.75 0 00-.75-.75H5.25zM18 9a.75.75 0 00-.75.75v.01c0 .414.336.75.75.75h.01a.75.75 0 00.75-.75V9.75a.75.75 0 00-.75-.75H18zM6.75 18.75a.75.75 0 00-.75.75v.01c0 .414.336.75.75.75h.01a.75.75 0 00.75-.75v-.01a.75.75 0 00-.75-.75H6.75z" clipRule="evenodd" />
+    </svg>
+);
 // Health check comment
 // N

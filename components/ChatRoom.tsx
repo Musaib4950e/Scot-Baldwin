@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { GoogleGenAI } from "@google/genai";
 import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon, ChatBubbleLeftRightIcon, PaintBrushIcon, FlagIcon, PencilSquareIcon, CheckIcon, TrashIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon, ChatBubbleLeftRightIcon, PaintBrushIcon, FlagIcon, PencilSquareIcon, CheckIcon, TrashIcon, SparklesIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db, MARKETPLACE_ITEMS } from './db';
 
@@ -719,10 +720,20 @@ interface ChatAreaProps {
   handleSendMessageSubmit: (e: React.FormEvent) => void;
   setIsMobileSidebarOpen: (isOpen: boolean) => void;
   openReportModal: (user: User) => void;
+  // AI Feature props
+  isAiLoading: boolean;
+  isAiMenuOpen: boolean;
+  isToneSubMenuOpen: boolean;
+  setIsToneSubMenuOpen: (isOpen: boolean) => void;
+  aiButtonRef: React.RefObject<HTMLButtonElement>;
+  aiMenuRef: React.RefObject<HTMLDivElement>;
+  toggleAiMenu: () => void;
+  handleAiAction: (action: 'improve' | 'shorter' | 'longer' | 'tone', tone?: 'formal' | 'casual' | 'funny' | 'poetic') => Promise<void>;
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, currentUser, users, chatMessages, messagesEndRef, isAccountFrozen, newMessage, setNewMessage, handleSendMessageSubmit, setIsMobileSidebarOpen, openReportModal }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, currentUser, users, chatMessages, messagesEndRef, isAccountFrozen, newMessage, setNewMessage, handleSendMessageSubmit, setIsMobileSidebarOpen, openReportModal, isAiLoading, isAiMenuOpen, isToneSubMenuOpen, setIsToneSubMenuOpen, aiButtonRef, aiMenuRef, toggleAiMenu, handleAiAction }) => {
     const otherUser = activeChat?.type === ChatType.DM ? users.find(u => u.id === activeChat.members.find(id => id !== currentUser.id)) : null;
+    const menuItemClasses = "w-full text-left px-3 py-1.5 text-sm font-medium rounded-md hover:bg-white/10 transition-colors flex items-center justify-between";
     
     return (
         <main className="flex-1 flex flex-col bg-black/10">
@@ -749,9 +760,34 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, currentUser, users, cha
                         {isAccountFrozen && (
                             <div className="text-center p-3 mb-2 bg-red-500/10 text-red-300 rounded-lg text-sm">Your account is frozen. You cannot send messages.</div>
                         )}
-                        <form onSubmit={handleSendMessageSubmit} className="flex items-center gap-3">
-                            <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} disabled={isAccountFrozen} placeholder="Type a message..." className="flex-grow w-full bg-white/5 border border-white/10 rounded-full px-5 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50" />
-                            <button type="submit" disabled={!newMessage.trim() || isAccountFrozen} className="p-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-full transition-transform transform hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70 disabled:scale-100"><PaperAirplaneIcon className="w-6 h-6" /></button>
+                        <form onSubmit={handleSendMessageSubmit} className="relative flex items-center gap-3">
+                             {isAiMenuOpen && (
+                                <div ref={aiMenuRef} className="absolute bottom-full mb-2 w-48 bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-30 p-1.5 space-y-1 animate-fade-in-up">
+                                    <button type="button" onClick={() => handleAiAction('improve')} className={menuItemClasses}>Improve Writing</button>
+                                    <button type="button" onClick={() => handleAiAction('shorter')} className={menuItemClasses}>Make Shorter</button>
+                                    <button type="button" onClick={() => handleAiAction('longer')} className={menuItemClasses}>Make Longer</button>
+                                    <div className="relative" onMouseEnter={() => setIsToneSubMenuOpen(true)} onMouseLeave={() => setIsToneSubMenuOpen(false)}>
+                                        <button type="button" className={menuItemClasses}>Change Tone <ChevronDownIcon className="w-4 h-4 -rotate-90" /></button>
+                                        {isToneSubMenuOpen && (
+                                            <div className="absolute left-full -top-1 ml-1 w-32 bg-slate-900/50 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-30 p-1.5 space-y-1 animate-fade-in-up">
+                                                <button type="button" onClick={() => handleAiAction('tone', 'formal')} className={menuItemClasses}>Formal</button>
+                                                <button type="button" onClick={() => handleAiAction('tone', 'casual')} className={menuItemClasses}>Casual</button>
+                                                <button type="button" onClick={() => handleAiAction('tone', 'funny')} className={menuItemClasses}>Funny</button>
+                                                <button type="button" onClick={() => handleAiAction('tone', 'poetic')} className={menuItemClasses}>Poetic</button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            <div className="relative flex-grow">
+                                <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} disabled={isAccountFrozen || isAiLoading} placeholder={isAiLoading ? "AI is thinking..." : "Type a message..."} className="flex-grow w-full bg-white/5 border border-white/10 rounded-full pl-5 pr-12 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-cyan-500 disabled:opacity-50" />
+                                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                    <button ref={aiButtonRef} type="button" onClick={toggleAiMenu} disabled={!newMessage.trim() || isAccountFrozen || isAiLoading} className="p-2 text-slate-400 rounded-full transition-colors hover:text-cyan-300 hover:bg-cyan-500/10 disabled:text-slate-600 disabled:hover:bg-transparent disabled:cursor-not-allowed" title="AI Magic Wand">
+                                        {isAiLoading ? ( <div className="w-5 h-5 border-2 border-slate-500 border-t-cyan-400 rounded-full animate-spin"></div> ) : ( <SparklesIcon className="w-5 h-5" /> )}
+                                    </button>
+                                </div>
+                            </div>
+                            <button type="submit" disabled={!newMessage.trim() || isAccountFrozen || isAiLoading} className="p-3 bg-gradient-to-r from-cyan-500 to-blue-500 text-white rounded-full transition-transform transform hover:scale-110 disabled:from-slate-600 disabled:to-slate-700 disabled:opacity-70 disabled:scale-100"><PaperAirplaneIcon className="w-6 h-6" /></button>
                         </form>
                     </footer>
                 </>
@@ -784,6 +820,13 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isMultiDeleteMode, setIsMultiDeleteMode] = useState(false);
     const [chatsToDelete, setChatsToDelete] = useState<string[]>([]);
+    
+    // AI Feature State
+    const [isAiLoading, setIsAiLoading] = useState(false);
+    const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
+    const [isToneSubMenuOpen, setIsToneSubMenuOpen] = useState(false);
+    const aiButtonRef = useRef<HTMLButtonElement>(null);
+    const aiMenuRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -798,10 +841,14 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
             if (userSwitcherRef.current && !userSwitcherRef.current.contains(event.target as Node)) {
                 setIsUserSwitcherOpen(false);
             }
+            if (isAiMenuOpen && aiMenuRef.current && !aiMenuRef.current.contains(event.target as Node) && aiButtonRef.current && !aiButtonRef.current.contains(event.target as Node)) {
+                setIsAiMenuOpen(false);
+                setIsToneSubMenuOpen(false);
+            }
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
+    }, [isAiMenuOpen]);
 
     const isAccountFrozen = useMemo(() => {
         return !!(currentUser.isFrozen && (!currentUser.frozenUntil || currentUser.frozenUntil > Date.now()));
@@ -899,6 +946,59 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         }
     };
 
+    // --- AI Feature Logic ---
+    const toggleAiMenu = () => {
+        setIsAiMenuOpen(prev => !prev);
+        setIsToneSubMenuOpen(false);
+    };
+    
+    const handleAiAction = async (action: 'improve' | 'shorter' | 'longer' | 'tone', tone?: 'formal' | 'casual' | 'funny' | 'poetic') => {
+        if (!newMessage.trim() || isAiLoading) return;
+
+        setIsAiMenuOpen(false);
+        setIsToneSubMenuOpen(false);
+        setIsAiLoading(true);
+
+        let prompt = '';
+        const originalText = `Original text: "${newMessage}"`;
+
+        switch (action) {
+            case 'improve':
+                prompt = `Improve the grammar, spelling, and clarity of the following text, while keeping the original meaning. Only return the improved text.\n${originalText}`;
+                break;
+            case 'shorter':
+                prompt = `Make the following text more concise. Only return the shorter text.\n${originalText}`;
+                break;
+            case 'longer':
+                prompt = `Expand on the following text, adding more detail and making it more descriptive. Only return the longer text.\n${originalText}`;
+                break;
+            case 'tone':
+                if (tone) {
+                    prompt = `Rewrite the following text in a ${tone} tone. Only return the rewritten text.\n${originalText}`;
+                }
+                break;
+        }
+
+        if (!prompt) {
+            setIsAiLoading(false);
+            return;
+        }
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: prompt,
+            });
+            setNewMessage(response.text.trim());
+        } catch (error) {
+            console.error("Gemini API error:", error);
+            alert("Sorry, the AI assistant could not process your request at this time.");
+        } finally {
+            setIsAiLoading(false);
+        }
+    };
+
     return (
         <>
             <ProfileModal
@@ -963,6 +1063,14 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                     handleSendMessageSubmit={handleSendMessageSubmit}
                     setIsMobileSidebarOpen={setIsMobileSidebarOpen}
                     openReportModal={openReportModal}
+                    isAiLoading={isAiLoading}
+                    isAiMenuOpen={isAiMenuOpen}
+                    isToneSubMenuOpen={isToneSubMenuOpen}
+                    setIsToneSubMenuOpen={setIsToneSubMenuOpen}
+                    aiButtonRef={aiButtonRef}
+                    aiMenuRef={aiMenuRef}
+                    toggleAiMenu={toggleAiMenu}
+                    handleAiAction={handleAiAction}
                 />
             </div>
         </>
