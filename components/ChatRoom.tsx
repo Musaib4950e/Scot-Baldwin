@@ -15,7 +15,7 @@ interface ChatRoomProps {
   transactions: Transaction[];
   loans: Loan[];
   loggedInUsers: User[];
-  onSendMessage: (chatId: string, text: string) => Promise<void>;
+  onSendMessage: (chatId: string, text: string) => void;
   onCreateChat: (targetUser: User) => Promise<Chat>;
   onCreateGroupChat: (params: { memberIds: string[]; groupName: string; }) => Promise<void>;
   onLogout: () => Promise<void>;
@@ -1008,10 +1008,10 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         }
     };
 
-    const handleSendMessageSubmit = async (e: React.FormEvent) => {
+    const handleSendMessageSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!newMessage.trim() || !activeChatId) return;
-        await onSendMessage(activeChatId, newMessage);
+        onSendMessage(activeChatId, newMessage);
         setNewMessage('');
     };
     

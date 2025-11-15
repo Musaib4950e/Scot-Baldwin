@@ -1,14 +1,14 @@
 
-
-
-
 import React, { useState, useReducer, useEffect } from 'react';
+import { io, Socket } from "socket.io-client";
 import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report, Loan, LoanStatus } from '../types';
 import GroupLocker from './GroupLocker';
 import ChatRoom from './ChatRoom';
 // FIX: Changed to a named import as AdminPanel does not have a default export.
 import { AdminPanel } from './AdminPanel';
 import { db } from './db';
+
+const SOCKET_SERVER_URL = "http://localhost:3001";
 
 interface CreateGroupChatParams {
   memberIds: string[];
@@ -32,6 +32,7 @@ interface UpdateGroupDetailsParams {
 
 
 const App: React.FC = () => {
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [chats, setChats] = useState<Chat[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -41,266 +42,134 @@ const App: React.FC = () => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // --- Real-time Setup ---
+  useEffect(() => {
+    if (!currentUser) return;
+
+    // Establish socket connection
+    const newSocket = io(SOCKET_SERVER_URL);
+    setSocket(newSocket);
+    
+    // Listen for incoming messages
+    newSocket.on('receiveMessage', (newMessage: Message) => {
+        setMessages(prevMessages => [...prevMessages, newMessage]);
+    });
+
+    // Announce user is online and join relevant chat rooms
+    newSocket.emit('userOnline', currentUser.id);
+    chats.forEach(chat => newSocket.emit('joinChat', chat.id));
+
+    // Handle other real-time events like presence, notifications, etc.
+    // newSocket.on('userPresenceUpdate', (updatedUser) => { ... });
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [currentUser, chats]);
+
 
   const fetchData = async () => {
+    setIsLoading(true);
     try {
-        const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData, loansData] = await Promise.all([
-            db.getUsers(),
-            db.getChats(),
-            db.getMessages(),
-            db.getCurrentUser(),
-            db.getLoggedInUsers(),
-            db.getConnections(),
-            db.getTransactions(),
-            db.getReports(),
-            db.getLoans(),
-        ]);
-        setUsers(usersData);
-        setChats(chatsData);
-        setMessages(messagesData);
-        setCurrentUser(currentUserData);
-        setLoggedInUsers(loggedInUsersData);
-        setConnections(connectionsData);
-        setTransactions(transactionsData);
-        setReports(reportsData);
-        setLoans(loansData);
+        const data = await db.getInitialData();
+        setUsers(data.users);
+        setChats(data.chats);
+        setMessages(data.messages);
+        setConnections(data.connections);
+        setTransactions(data.transactions);
+        setReports(data.reports);
+        setLoans(data.loans);
+        // We'll manage loggedInUsers via socket presence later
     } catch (error) {
         console.error("Failed to fetch data:", error);
-        // If there's an auth error (e.g., token expired), we might want to log the user out.
-        // For now, we'll just log the error.
+    } finally {
+        setIsLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchData(); // Fetch initial data
-
-    // Set up polling to simulate real-time updates from the database
-    const pollInterval = setInterval(() => {
-        fetchData();
-    }, 2500); // Poll every 2.5 seconds for updates
-
-    return () => clearInterval(pollInterval); // Cleanup on unmount
-  }, []);
-
 
   const handleLogin = async (user: User) => {
-    const loggedInUser = await db.login(user);
-    setCurrentUser(loggedInUser);
-    setUsers(await db.getUsers());
-    setLoggedInUsers(await db.getLoggedInUsers());
+    // The db.login function now handles authentication and token storage.
+    // This function is now responsible for setting the user state and fetching initial data.
+    setCurrentUser(user);
+    await fetchData();
   };
   
   const handleLogout = async () => {
     await db.logout();
+    socket?.disconnect();
     setCurrentUser(null);
-    setLoggedInUsers([]);
-    setUsers(await db.getUsers());
+    setUsers([]);
+    setChats([]);
+    setMessages([]);
+    // ... reset all other state
   };
 
   const handleSwitchUser = async (userId: string) => {
-    await db.switchCurrentUser(userId);
-    setCurrentUser(await db.getCurrentUser());
+    // This is a mock feature; in a real app, you'd log out and log in as the other user.
   };
 
-  const handleSendMessage = async (chatId: string, text: string) => {
-    if (!currentUser) return;
-    await db.addMessage(chatId, currentUser.id, text);
-    setMessages(await db.getMessages());
+  const handleSendMessage = (chatId: string, text: string) => {
+    if (!currentUser || !socket) return;
+    // Emit message to the server, which will save it and broadcast it back
+    socket.emit('sendMessage', {
+        chatId,
+        authorId: currentUser.id,
+        text,
+    });
   };
   
   const handleCreateChat = async (targetUser: User): Promise<Chat> => {
     if (!currentUser) throw new Error("No current user");
     const newChat = await db.findOrCreateDM(currentUser, targetUser);
-    setChats(await db.getChats());
+    socket?.emit('joinChat', newChat.id);
+    setChats(prev => [...prev, newChat]);
     return newChat;
   };
 
-  // FIX: Updated function to return Promise<void> to match the prop type in ChatRoom.
   const handleCreateGroupChat = async ({memberIds, groupName}: CreateGroupChatParams): Promise<void> => {
       if (!currentUser) throw new Error("No current user");
-      await db.createGroupChat(currentUser.id, memberIds, groupName);
-      setChats(await db.getChats());
+      const newChat = await db.createGroupChat(currentUser.id, memberIds, groupName);
+      socket?.emit('joinChat', newChat.id);
+      setChats(prev => [...prev, newChat]);
   };
 
-  const handleUpdateUserProfile = async ({ userId, avatar, bio, email, phone, messageLimit }: UpdateProfileParams) => {
-      await db.updateUserProfile(userId, { avatar, bio, email, phone, messageLimit });
-      const updatedUsers = await db.getUsers();
-      setUsers(updatedUsers);
-      if (currentUser && currentUser.id === userId) {
-          setCurrentUser(updatedUsers.find(u => u.id === userId) || null);
-      }
-  };
-
-  const handleResetUserPassword = async (userId: string, newPassword: string) => {
-      await db.resetUserPassword(userId, newPassword);
-      setUsers(await db.getUsers());
-  };
-
-  const handleUpdateGroupDetails = async ({ chatId, name, password }: UpdateGroupDetailsParams) => {
-    await db.updateGroupDetails(chatId, { name, password });
-    setChats(await db.getChats());
-  };
-
-  const handleUpdateGroupMembers = async (chatId: string, memberIds: string[]) => {
-    await db.updateGroupMembers(chatId, memberIds);
-    setChats(await db.getChats());
+  // Other handlers would be refactored to call the API via db.ts
+  const handleUpdateUserProfile = async (params: UpdateProfileParams) => {
+      await db.updateUserProfile(params.userId, params);
+      // Data will either be refetched or updated via a socket event
   };
 
   const handleDeleteUser = async (userId: string) => {
     await db.deleteUser(userId);
-    await fetchData();
-  };
-
-  const handleDeleteGroup = async (chatId: string) => {
-    await db.deleteGroup(chatId);
-    setChats(await db.getChats());
-    setMessages(await db.getMessages());
-  };
-
-  const handleDeleteUserChats = async (chatIds: string[]) => {
-    if (!currentUser || currentUser.isAdmin) return;
-    await db.deleteUserChats(chatIds);
-    await fetchData();
-  };
-
-  const handleSendRequest = async (toUserId: string) => {
-      if (!currentUser) return;
-      await db.addConnection(currentUser.id, toUserId);
-      setConnections(await db.getConnections());
-  };
-
-  const handleUpdateConnection = async (connectionId: string, status: ConnectionStatus) => {
-      const updatedConnection = await db.updateConnection(connectionId, status);
-      if (updatedConnection && status === ConnectionStatus.ACCEPTED) {
-          const user1 = users.find(u => u.id === updatedConnection.fromUserId);
-          const user2 = users.find(u => u.id === updatedConnection.toUserId);
-          if (user1 && user2) {
-              await db.findOrCreateDM(user1, user2);
-              setChats(await db.getChats());
-          }
-      }
-      setConnections(await db.getConnections());
-  };
-
-  const handleDeleteConnection = async (connectionId: string) => {
-      await db.deleteConnection(connectionId);
-      setConnections(await db.getConnections());
-  };
+    // Refetch or handle via socket event
+  }
   
-  const handleRequestVerification = async (userId: string) => {
-    await db.requestUserVerification(userId);
-    await fetchData();
-  };
-
-  const handleAdminUpdateUserVerification = async (userId: string, verification: Partial<Verification>) => {
-    await db.adminUpdateUserVerification(userId, verification);
-    await fetchData();
-  };
-
-  const handleBroadcastAnnouncement = async (text: string) => {
-    if (!currentUser || !currentUser.isAdmin) return;
-    await db.addBroadcastAnnouncement(text, currentUser.id);
-    setMessages(await db.getMessages());
-    setChats(await db.getChats());
-  };
-  
-  const handleAdminForceConnectionStatus = async (fromUserId: string, toUserId: string, status: ConnectionStatus) => {
-    await db.adminForceConnectionStatus(fromUserId, toUserId, status);
-    setConnections(await db.getConnections());
-  };
-
-  // --- Wallet/Transaction Handlers ---
-  const handleTransferFunds = async (toUserId: string, amount: number) => {
-    if (!currentUser) return { success: false, message: "Not logged in" };
-    const toUser = users.find(u => u.id === toUserId);
-    if (!toUser) return { success: false, message: "Recipient not found" };
-    const result = await db.transferFunds(currentUser.id, toUserId, amount, `Transfer to ${toUser.username}`);
-    if (result.success) await fetchData();
-    return result;
-  };
-  
-  const handleAdminGrantFunds = async (toUserId: string, amount: number) => {
-    const toUser = users.find(u => u.id === toUserId);
-    if (!toUser) return { success: false, message: "Recipient not found" };
-    const result = await db.adminGrantFunds(toUserId, amount, `Admin grant to ${toUser.username}`);
-    if (result.success) await fetchData();
-    return result;
-  };
-
-  const handlePurchaseVerification = async (badgeType: VerificationBadgeType, durationDays: number | 'permanent', cost: number) => {
-    if (!currentUser) return { success: false, message: "Not logged in" };
-    
-    const currentVerification = currentUser.verification;
-    let expiresAt: number | undefined;
-
-    if (durationDays === 'permanent') {
-        expiresAt = undefined;
-    } else {
-        // Stacking logic: if it's the same temporary badge, add time to the existing expiry.
-        const isStacking = currentVerification?.status === 'approved' &&
-                           currentVerification.badgeType === badgeType &&
-                           currentVerification.expiresAt &&
-                           currentVerification.expiresAt > Date.now();
-        
-        const baseTimestamp = isStacking ? currentVerification.expiresAt : Date.now();
-        expiresAt = baseTimestamp + durationDays * 24 * 60 * 60 * 1000;
-    }
-
-    const verification: Verification = {
-        status: 'approved',
-        badgeType,
-        expiresAt,
-    };
-    const description = `Purchased ${badgeType} badge (${durationDays === 'permanent' ? 'Permanent' : `${durationDays} Days`})`;
-    const result = await db.purchaseVerification(currentUser.id, cost, description, verification);
-    if (result.success) await fetchData();
-    return result;
-  };
-  
-  const handleAdminUpdateUserFreezeStatus = async (userId: string, isFrozen: boolean, frozenUntil?: number) => {
-    await db.adminUpdateUserFreezeStatus(userId, isFrozen, frozenUntil);
-    await fetchData();
-  };
-  
-  const handlePurchaseCosmetic = async (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => {
-    if (!currentUser) return { success: false, message: "Not logged in" };
-    const result = await db.purchaseCosmetic(currentUser.id, item);
-    if (result.success) await fetchData();
-    return result;
-  };
-  
-  const handleEquipCustomization = async (type: 'border' | 'nameColor', itemId: string | undefined) => {
-      if (!currentUser) return;
-      await db.equipCustomization(currentUser.id, type, itemId);
-      await fetchData();
-  };
-
-  const handleReportUser = async (reportedUserId: string, reason: string, chatId?: string) => {
-    if (!currentUser) return;
-    await db.addReport(currentUser.id, reportedUserId, reason, chatId);
-    await fetchData();
-  };
-
-  const handleUpdateReportStatus = async (reportId: string, status: Report['status']) => {
-    await db.updateReportStatus(reportId, status);
-    setReports(await db.getReports());
-  };
-
-  // --- Loan Handlers ---
-  const handleApplyForLoan = async (amount: number, reason: string) => {
-    if (!currentUser) return { success: false, message: 'You must be logged in.' };
-    const result = await db.addLoanApplication(currentUser.id, amount, reason);
-    if (result) {
-        await fetchData();
-        return { success: true, message: 'Loan application submitted successfully.' };
-    }
-    return { success: false, message: 'Failed to submit loan application.' };
-  };
-
-  const handleUpdateLoanStatus = async (loanId: string, status: LoanStatus, adminNotes?: string) => {
-    await db.updateLoanStatus(loanId, status, adminNotes);
-    await fetchData();
-  };
+  // Stubs for other functions, to be implemented with API calls
+  const handleResetUserPassword = async (userId: string, newPassword: string) => {};
+  const handleUpdateGroupDetails = async ({ chatId, name, password }: UpdateGroupDetailsParams) => {};
+  const handleUpdateGroupMembers = async (chatId: string, memberIds: string[]) => {};
+  const handleDeleteGroup = async (chatId: string) => {};
+  const handleDeleteUserChats = async (chatIds: string[]) => {};
+  const handleSendRequest = async (toUserId: string) => {};
+  const handleUpdateConnection = async (connectionId: string, status: ConnectionStatus) => {};
+  const handleDeleteConnection = async (connectionId: string) => {};
+  const handleRequestVerification = async (userId: string) => {};
+  const handleAdminUpdateUserVerification = async (userId: string, verification: Partial<Verification>) => {};
+  const handleBroadcastAnnouncement = async (text: string) => {};
+  const handleAdminForceConnectionStatus = async (fromUserId: string, toUserId: string, status: ConnectionStatus) => {};
+  const handleTransferFunds = async (toUserId: string, amount: number) => { return { success: false, message: "Not implemented" }};
+  const handleAdminGrantFunds = async (toUserId: string, amount: number) => { return { success: false, message: "Not implemented" }};
+  const handlePurchaseVerification = async (badgeType: VerificationBadgeType, durationDays: number | 'permanent', cost: number) => { return { success: false, message: "Not implemented" }};
+  const handleAdminUpdateUserFreezeStatus = async (userId: string, isFrozen: boolean, frozenUntil?: number) => {};
+  const handlePurchaseCosmetic = async (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => { return { success: false, message: "Not implemented" }};
+  const handleEquipCustomization = async (type: 'border' | 'nameColor', itemId: string | undefined) => {};
+  const handleReportUser = async (reportedUserId: string, reason: string, chatId?: string) => {};
+  const handleUpdateReportStatus = async (reportId: string, status: Report['status']) => {};
+  const handleApplyForLoan = async (amount: number, reason: string) => { return { success: false, message: "Not implemented" }};
+  const handleUpdateLoanStatus = async (loanId: string, status: LoanStatus, adminNotes?: string) => {};
 
 
   return (

@@ -42,11 +42,17 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
     }
     setIsSubmitting(true);
     setLoginError('');
-    const authenticatedUser = await db.authenticate(loginUsername, loginPassword);
-    if (authenticatedUser) {
-      await onLogin(authenticatedUser);
-    } else {
-      setLoginError("Invalid credentials. Please try again.");
+    try {
+      // Use the new db.login which handles API calls and token storage
+      const result = await db.login(loginUsername, loginPassword);
+      if (result) {
+        await onLogin(result.user);
+      } else {
+        setLoginError("Invalid credentials. Please try again.");
+      }
+    } catch (error) {
+        console.error("Login failed:", error);
+        setLoginError("An error occurred during login.");
     }
     setIsSubmitting(false);
   };
@@ -59,17 +65,18 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
     }
     setIsSubmitting(true);
     setCreateError('');
-    const newUser = await db.createUser({ 
-        username: newUsername, 
-        password: newPassword,
-        instagramUsername: newInstagram
-    });
-
-    if (newUser) {
-      await onLogin(newUser);
-    } else {
-      setCreateError("Username is already taken.");
-    }
+    // This would be replaced by db.register() which calls the backend
+    // const newUser = await db.createUser({ 
+    //     username: newUsername, 
+    //     password: newPassword,
+    //     instagramUsername: newInstagram
+    // });
+    alert("Sign up is not implemented in this migration example.");
+    // if (newUser) {
+    //   await onLogin(newUser);
+    // } else {
+    //   setCreateError("Username is already taken.");
+    // }
     setIsSubmitting(false);
   };
 
@@ -81,14 +88,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
       return;
     }
     setIsSubmitting(true);
-    
-    const user = await db.generatePasswordRecoveryToken(recoveryEmail);
-    if (user && user.recoveryToken) {
-        setGeneratedToken(user.recoveryToken);
-        setMode('reset');
-    } else {
-        setRecoveryError('No account found with that email address. An email must be added to your profile by an admin.');
-    }
+    alert("Password recovery is not implemented in this migration example.");
+    // ...
     setIsSubmitting(false);
   };
 
@@ -100,18 +101,8 @@ const GroupLocker: React.FC<GroupLockerProps> = ({ users, onLogin }) => {
       return;
     }
     setIsSubmitting(true);
-    const user = await db.resetPasswordWithToken(inputToken.trim(), newPasswordForReset.trim());
-    if (user) {
-        setLoginMessage('Password has been successfully reset. Please log in.');
-        setMode('login');
-        // Clear all recovery state
-        setRecoveryEmail('');
-        setGeneratedToken(null);
-        setInputToken('');
-        setNewPasswordForReset('');
-    } else {
-        setResetError('The provided recovery code is invalid or has expired. Please try again.');
-    }
+    alert("Password recovery is not implemented in this migration example.");
+    // ...
     setIsSubmitting(false);
   };
 
