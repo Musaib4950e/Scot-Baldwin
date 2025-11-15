@@ -1,4 +1,4 @@
-import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, Report, VerificationBadgeType, ProfileCustomization, Inventory, TransactionType } from '../types';
+import { User, Chat, Message, ChatType, Connection, ConnectionStatus, Verification, Transaction, Report, VerificationBadgeType, ProfileCustomization, Inventory, TransactionType, Loan, LoanStatus } from '../types';
 
 // This file has been reverted to a local storage-based implementation for a client-side only experience.
 // Data is seeded on first load and then persisted in the browser's localStorage.
@@ -23,6 +23,7 @@ class AppDatabase {
     private connections: Connection[] = [];
     private transactions: Transaction[] = [];
     private reports: Report[] = [];
+    private loans: Loan[] = [];
     private currentUserId: string | null = null;
     private loggedInUserIds: string[] = [];
     private dbKey = 'bak-ko-db';
@@ -42,6 +43,7 @@ class AppDatabase {
                 this.connections = parsedData.connections || [];
                 this.transactions = parsedData.transactions || [];
                 this.reports = parsedData.reports || [];
+                this.loans = parsedData.loans || [];
                 this.currentUserId = parsedData.currentUserId || null;
                 this.loggedInUserIds = parsedData.loggedInUserIds || [];
 
@@ -78,6 +80,7 @@ class AppDatabase {
                 connections: this.connections,
                 transactions: this.transactions,
                 reports: this.reports,
+                loans: this.loans,
                 currentUserId: this.currentUserId,
                 loggedInUserIds: this.loggedInUserIds,
             };
@@ -99,6 +102,11 @@ class AppDatabase {
         this.users = [adminUser, ...usersData.map(u => ({ ...u, id: generateId('user'), online: false, walletBalance: Math.floor(Math.random() * 200) + 50, inventory: { borders: [], nameColors: [] } }))];
         
         const [alice, bob, charlie, david] = this.users.slice(1);
+
+        this.loans = [
+            { id: generateId('loan'), userId: david.id, amount: 500, reason: 'Need to buy a new monitor for work.', status: 'pending', requestedAt: Date.now() - 2 * 24 * 60 * 60 * 1000, updatedAt: Date.now() - 2 * 24 * 60 * 60 * 1000 },
+            { id: generateId('loan'), userId: charlie.id, amount: 1200, reason: 'Emergency vet bills for my cat.', status: 'approved', adminNotes: 'Approved due to emergency.', requestedAt: Date.now() - 5 * 24 * 60 * 60 * 1000, updatedAt: Date.now() - 4 * 24 * 60 * 60 * 1000 },
+        ];
 
         const dmAliceBob: Chat = { id: generateId('chat'), type: ChatType.DM, members: [alice.id, bob.id] };
         const dmAliceCharlie: Chat = { id: generateId('chat'), type: ChatType.DM, members: [alice.id, charlie.id] };
@@ -130,6 +138,7 @@ class AppDatabase {
     getConnections = () => this.connections;
     getTransactions = () => this.transactions;
     getReports = () => this.reports;
+    getLoans = () => this.loans;
     getCurrentUser = () => this.users.find(u => u.id === this.currentUserId) || null;
     getLoggedInUsers = () => this.users.filter(u => this.loggedInUserIds.includes(u.id));
 
@@ -287,6 +296,41 @@ class AppDatabase {
         }
         return null;
     };
+
+    // --- Loan Methods ---
+    addLoanApplication = (userId: string, amount: number, reason: string): Loan => {
+        const newLoan: Loan = { id: generateId('loan'), userId, amount, reason, status: 'pending', requestedAt: Date.now(), updatedAt: Date.now() };
+        this.loans.push(newLoan);
+        this.save();
+        return newLoan;
+    };
+
+    updateLoanStatus = (loanId: string, status: LoanStatus, adminNotes?: string): Loan | null => {
+        const loan = this.loans.find(l => l.id === loanId);
+        if (!loan) return null;
+        
+        loan.status = status;
+        loan.updatedAt = Date.now();
+        if (adminNotes) loan.adminNotes = adminNotes;
+
+        if (status === 'approved') {
+            const user = this.users.find(u => u.id === loan.userId);
+            if (user) {
+                user.walletBalance += loan.amount;
+                this.transactions.push({
+                    id: generateId('txn'),
+                    type: 'loan',
+                    fromUserId: 'admin-grant',
+                    toUserId: user.id,
+                    amount: loan.amount,
+                    timestamp: Date.now(),
+                    description: `Loan approved: ${loan.reason}`
+                });
+            }
+        }
+        this.save();
+        return loan;
+    };
 }
 
 const DB = new AppDatabase();
@@ -300,6 +344,7 @@ export const db = {
   getConnections: asyncify(DB.getConnections),
   getTransactions: asyncify(DB.getTransactions),
   getReports: asyncify(DB.getReports),
+  getLoans: asyncify(DB.getLoans),
   getCurrentUser: asyncify(DB.getCurrentUser),
   getLoggedInUsers: asyncify(DB.getLoggedInUsers),
   isUserLoggedIn: asyncify(() => !!DB.getCurrentUser()),
@@ -315,6 +360,7 @@ export const db = {
   addConnection: asyncify(DB.addConnection),
   addBroadcastAnnouncement: asyncify(DB.addBroadcastAnnouncement),
   addReport: asyncify(DB.addReport),
+  addLoanApplication: asyncify(DB.addLoanApplication),
   
   switchCurrentUser: asyncify(DB.switchCurrentUser),
   updateUserProfile: asyncify(DB.updateUserProfile),
@@ -328,6 +374,7 @@ export const db = {
   adminUpdateUserFreezeStatus: asyncify(DB.adminUpdateUserFreezeStatus),
   equipCustomization: asyncify(DB.equipCustomization),
   updateReportStatus: asyncify(DB.updateReportStatus),
+  updateLoanStatus: asyncify(DB.updateLoanStatus),
 
   transferFunds: asyncify(DB.transferFunds),
   adminGrantFunds: asyncify(DB.adminGrantFunds),

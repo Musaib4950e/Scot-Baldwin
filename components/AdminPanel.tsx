@@ -1,8 +1,7 @@
-
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report, TransactionType } from '../types';
+import { User, Chat, ChatType, Message, Connection, ConnectionStatus, Verification, VerificationBadgeType, Transaction, Report, TransactionType, Loan, LoanStatus } from '../types';
 import { db, MARKETPLACE_ITEMS } from './db';
-import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon, ExclamationTriangleIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, Cog6ToothIcon, KeyIcon, PencilIcon, ShieldCheckIcon, XMarkIcon, UsersIcon, TrashIcon, EyeIcon, ArrowLeftIcon, BanIcon, EnvelopeIcon, ChartBarIcon, MegaphoneIcon, CheckBadgeIcon, ClockIcon, WalletIcon, CurrencyDollarIcon, ShoppingCartIcon, LockOpenIcon, CheckCircleIcon, ChevronDownIcon, PaintBrushIcon, ExclamationTriangleIcon, BanknotesIcon } from './icons';
 import ChatMessage from './ChatMessage';
 
 // Generic Modal Component
@@ -70,6 +69,7 @@ interface AdminPanelProps {
     connections: Connection[];
     transactions: Transaction[];
     reports: Report[];
+    loans: Loan[];
     onLogout: () => Promise<void>;
     onUpdateUserProfile: (params: { userId: string, avatar: string, bio: string, email: string, phone: string, messageLimit?: number }) => Promise<void>;
     onResetUserPassword: (userId: string, newPass: string) => Promise<void>;
@@ -85,6 +85,7 @@ interface AdminPanelProps {
     onAdminGrantFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
     onAdminUpdateUserFreezeStatus: (userId: string, isFrozen: boolean, frozenUntil?: number) => Promise<void>;
     onUpdateReportStatus: (reportId: string, status: Report['status']) => Promise<void>;
+    onUpdateLoanStatus: (loanId: string, status: LoanStatus, adminNotes?: string) => Promise<void>;
 }
 
 const AvatarWithBorder: React.FC<{ user: User, containerClasses: string, textClasses: string }> = ({ user, containerClasses, textClasses }) => {
@@ -157,7 +158,8 @@ const UserCell: React.FC<{ userId: string; users: User[] }> = ({ userId, users }
 };
 
 const TransactionTypeBadge: React.FC<{ type: TransactionType }> = ({ type }) => {
-    const typeStyles = {
+    // FIX: Changed icon type from JSX.Element to React.ReactNode to fix "Cannot find namespace 'JSX'" error.
+    const typeStyles: Record<TransactionType, { icon: React.ReactNode; text: string; bg: string; textColor: string }> = {
         transfer: {
             icon: <CurrencyDollarIcon className="w-4 h-4 text-green-300"/>,
             text: 'Transfer',
@@ -176,6 +178,12 @@ const TransactionTypeBadge: React.FC<{ type: TransactionType }> = ({ type }) => 
             bg: 'bg-purple-500/10',
             textColor: 'text-purple-300',
         },
+        loan: {
+            icon: <BanknotesIcon className="w-4 h-4 text-blue-300"/>,
+            text: 'Loan',
+            bg: 'bg-blue-500/10',
+            textColor: 'text-blue-300',
+        },
     };
 
     const style = typeStyles[type];
@@ -189,7 +197,7 @@ const TransactionTypeBadge: React.FC<{ type: TransactionType }> = ({ type }) => 
     );
 };
 
-type AdminView = 'dashboard' | 'users' | 'groups' | 'connections' | 'verification' | 'transactions' | 'wallets' | 'reports' | 'announcements';
+type AdminView = 'dashboard' | 'users' | 'groups' | 'connections' | 'verification' | 'transactions' | 'banking' | 'reports' | 'announcements';
 
 const NavItem: React.FC<{
     viewName: AdminView;
@@ -225,7 +233,7 @@ const NavHeader: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 
 export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
-    const { currentUser, users, chats, messages, connections, transactions, reports, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification, onAdminGrantFunds, onAdminUpdateUserFreezeStatus, onUpdateReportStatus } = props;
+    const { currentUser, users, chats, messages, connections, transactions, reports, loans, onLogout, onUpdateUserProfile, onResetUserPassword, onUpdateGroupDetails, onUpdateGroupMembers, onDeleteUser, onDeleteGroup, onUpdateConnection, onDeleteConnection, onBroadcastAnnouncement, onAdminForceConnectionStatus, onAdminUpdateVerification, onAdminGrantFunds, onAdminUpdateUserFreezeStatus, onUpdateReportStatus, onUpdateLoanStatus } = props;
     
     const [view, setView] = useState<AdminView>('dashboard');
     const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -238,6 +246,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
     const [isGrantModalOpen, setIsGrantModalOpen] = useState(false);
     const [isFreezeModalOpen, setIsFreezeModalOpen] = useState(false);
+    const [isLoanActionModalOpen, setIsLoanActionModalOpen] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
     const [modalView, setModalView] = useState<'profile' | 'connections' | 'wallet'>('profile');
@@ -266,6 +275,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     
     const [isBadgeSelectorOpen, setIsBadgeSelectorOpen] = useState(false);
     const badgeSelectorRef = useRef<HTMLDivElement>(null);
+    
+    const [bankingTab, setBankingTab] = useState<'balances' | 'loans'>('balances');
+    const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+    const [loanAction, setLoanAction] = useState<LoanStatus | null>(null);
+    const [adminNotes, setAdminNotes] = useState('');
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -280,6 +294,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const pendingRequests = useMemo(() => connections.filter(c => c.status === ConnectionStatus.PENDING), [connections]);
     const verificationRequests = useMemo(() => users.filter(u => u.verification?.status === 'pending'), [users]);
     const pendingReports = useMemo(() => reports.filter(r => r.status === 'pending'), [reports]);
+    const pendingLoans = useMemo(() => loans.filter(l => l.status === 'pending'), [loans]);
     const announcements = useMemo(() => messages.filter(m => m.type === 'announcement').sort((a, b) => b.timestamp - a.timestamp), [messages]);
     
     const viewingGroupMessages = useMemo(() => {
@@ -308,7 +323,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         const groupMessageCounts = messages.reduce((acc, msg) => { const chat = chats.find(c => c.id === msg.chatId && c.type === ChatType.GROUP); if(chat) acc[chat.id] = (acc[chat.id] || 0) + 1; return acc; }, {} as Record<string, number>);
         const activeGroups = Object.entries(groupMessageCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([chatId, count]) => ({ name: chats.find(c => c.id === chatId)?.name || 'Unknown Group', count }));
         
-        const totalVolume = transactions.filter(t => t.type === 'transfer').reduce((sum, t) => sum + t.amount, 0);
+        const totalVolume = transactions.filter(t => t.type === 'transfer' || t.type === 'loan').reduce((sum, t) => sum + t.amount, 0);
 
         return { totalUsers: nonAdminUsers.length, onlineUsers: nonAdminUsers.filter(u => u.online).length, registrationsChart: { labels: dayLabels, data: registrationsLast7Days }, messagesChart: { labels: dayLabels, data: messagesLast7Days }, activeGroups, totalVolume, totalTransactions: transactions.length };
     }, [users, messages, chats, transactions]);
@@ -338,6 +353,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         setFreezeValue('');
         setIsFreezeModalOpen(true);
     }
+    const openLoanActionModal = (loan: Loan, action: LoanStatus) => {
+        setSelectedLoan(loan);
+        setLoanAction(action);
+        setAdminNotes('');
+        setIsLoanActionModalOpen(true);
+    };
     
     const handleProfileUpdate = async () => { if (!selectedUser) return; setIsSubmitting(true); await onUpdateUserProfile({ userId: selectedUser.id, avatar, bio, email, phone, messageLimit }); setIsSubmitting(false); closeAllModals(); };
     const handlePasswordReset = async () => { if (!selectedUser || !newPassword.trim()) return; setIsSubmitting(true); await onResetUserPassword(selectedUser.id, newPassword.trim()); setIsSubmitting(false); closeAllModals(); };
@@ -405,6 +426,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
     const handleVerificationRevoke = async () => { if (!selectedUser) return; if (!window.confirm(`Are you sure you want to revoke the badge from ${selectedUser.username}?`)) return; setIsSubmitting(true); await onAdminUpdateVerification(selectedUser.id, { status: 'none' }); setIsSubmitting(false); closeAllModals(); };
 
+    const handleLoanAction = async () => {
+        if (!selectedLoan || !loanAction) return;
+        setIsSubmitting(true);
+        await onUpdateLoanStatus(selectedLoan.id, loanAction, adminNotes);
+        setIsSubmitting(false);
+        closeAllModals();
+    };
+
     const getVerificationStatusText = (user: User) => {
         const verification = user.verification;
         if (verification?.status === 'approved') {
@@ -421,7 +450,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         return 'Not Verified';
     };
 
-    const closeAllModals = () => { setIsEditUserModalOpen(false); setIsPasswordModalOpen(false); setIsEditGroupModalOpen(false); setIsVerificationModalOpen(false); setIsGrantModalOpen(false); setIsFreezeModalOpen(false); setSelectedUser(null); setSelectedGroup(null); };
+    const closeAllModals = () => { setIsEditUserModalOpen(false); setIsPasswordModalOpen(false); setIsEditGroupModalOpen(false); setIsVerificationModalOpen(false); setIsGrantModalOpen(false); setIsFreezeModalOpen(false); setIsLoanActionModalOpen(false); setSelectedUser(null); setSelectedGroup(null); setSelectedLoan(null); };
 
     const modalInputClasses = "w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all";
     const modalTextareaClasses = `${modalInputClasses} resize-none`;
@@ -461,7 +490,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <NavHeader>Management</NavHeader>
                         <NavItem viewName="users" currentView={view} setView={setView} icon={<Cog6ToothIcon className="w-6 h-6" />} label="Users" />
                         <NavItem viewName="groups" currentView={view} setView={setView} icon={<UsersIcon className="w-6 h-6" />} label="Groups" />
-                        <NavItem viewName="wallets" currentView={view} setView={setView} icon={<WalletIcon className="w-6 h-6" />} label="Wallets" />
+                        <NavItem viewName="banking" currentView={view} setView={setView} icon={<BanknotesIcon className="w-6 h-6" />} label="Banking" notificationCount={pendingLoans.length} />
                         <NavItem viewName="transactions" currentView={view} setView={setView} icon={<CurrencyDollarIcon className="w-6 h-6" />} label="Transactions" />
 
                         <NavHeader>Moderation</NavHeader>
@@ -565,7 +594,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                             </div>
                         </div>
                     )}
-                    {(view === 'users' || view === 'wallets' || view === 'groups' || view === 'connections' || view === 'verification' || view === 'reports' || view === 'transactions' || view === 'announcements') && (
+                    {(view === 'users' || view === 'banking' || view === 'groups' || view === 'connections' || view === 'verification' || view === 'reports' || view === 'transactions' || view === 'announcements') && (
                         <div className="space-y-8">
                              <h1 className="text-4xl font-bold aurora-text">{view.charAt(0).toUpperCase() + view.slice(1)} Management</h1>
                              <div className="glass-card rounded-2xl overflow-hidden">
@@ -575,11 +604,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         <tbody>{users.filter(u => !u.isAdmin).map(user => (<tr key={user.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors"><td className="p-4"><div className="flex items-center gap-3"><AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-lg" /><div><div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold" />{renderUserBadge(user)}</div><p className="text-xs text-slate-400 font-mono">{user.id}</p></div></div></td><td className="p-4 text-sm">{user.isFrozen ? <span className="flex items-center gap-1.5 text-red-400"><BanIcon className="w-4 h-4" />Frozen</span> : (user.online ? <span className="flex items-center gap-1.5 text-green-400"><div className="w-2 h-2 bg-green-400 rounded-full"></div>Online</span> : <span className="flex items-center gap-1.5 text-slate-400"><div className="w-2 h-2 bg-slate-500 rounded-full"></div>Offline</span>)}</td><td className="p-4"><div className="flex items-center gap-2"><button onClick={() => openEditUserModal(user)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Edit Profile"><PencilIcon className="w-4 h-4"/></button><button onClick={() => openPasswordModal(user)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Reset Password"><KeyIcon className="w-4 h-4"/></button><button onClick={() => openVerificationModal(user)} className="p-2 bg-white/10 rounded-md text-white hover:bg-white/20" title="Manage Verification"><CheckBadgeIcon className="w-4 h-4"/></button><button onClick={() => user.isFrozen ? handleUnfreeze(user.id) : openFreezeModal(user)} className={`p-2 rounded-md ${user.isFrozen ? 'bg-green-500/20 text-green-300' : 'bg-white/10 text-white'}`} title={user.isFrozen ? 'Unfreeze Account' : 'Freeze Account'}><BanIcon className="w-4 h-4"/></button><button onClick={() => handleDeleteUserConfirm(user)} className="p-2 bg-red-500/20 rounded-md text-red-300 hover:bg-red-500/30" title="Delete User"><TrashIcon className="w-4 h-4"/></button></div></td></tr>))}</tbody>
                                     </table>
                                 )}
-                                {view === 'wallets' && (
-                                    <table className="w-full text-left">
-                                        <thead className="bg-white/5"><tr className="border-b border-white/10"><th className="p-4 font-semibold">User</th><th className="p-4 font-semibold">Balance</th><th className="p-4 font-semibold">Actions</th></tr></thead>
-                                        <tbody>{users.filter(u => !u.isAdmin).map(user => (<tr key={user.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors"><td className="p-4"><div className="flex items-center gap-3"><AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-lg" /><div><div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold" />{renderUserBadge(user)}</div></div></div></td><td className="p-4 font-semibold text-lg font-mono">{formatCurrency(user.walletBalance)}</td><td className="p-4"><button onClick={() => openGrantModal(user)} className="px-3 py-1.5 bg-green-500/20 text-green-300 text-sm font-semibold rounded-md hover:bg-green-500/30">Grant Funds</button></td></tr>))}</tbody>
-                                    </table>
+                                {view === 'banking' && (
+                                    <div>
+                                        <div className="flex border-b border-white/10"><button onClick={() => setBankingTab('balances')} className={`px-4 py-3 text-sm font-semibold ${bankingTab === 'balances' ? 'border-b-2 border-blue-400 text-white' : 'text-slate-400'}`}>User Balances</button><button onClick={() => setBankingTab('loans')} className={`relative px-4 py-3 text-sm font-semibold ${bankingTab === 'loans' ? 'border-b-2 border-blue-400 text-white' : 'text-slate-400'}`}>Loan Requests {pendingLoans.length > 0 && <span className="absolute top-2 right-1 h-4 w-4 bg-red-500 text-xs rounded-full flex items-center justify-center">{pendingLoans.length}</span>}</button></div>
+                                        {bankingTab === 'balances' && (
+                                            <table className="w-full text-left">
+                                                <thead className="bg-white/5"><tr className="border-b border-white/10"><th className="p-4 font-semibold">User</th><th className="p-4 font-semibold">Balance</th><th className="p-4 font-semibold">Actions</th></tr></thead>
+                                                <tbody>{users.filter(u => !u.isAdmin).map(user => (<tr key={user.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors"><td className="p-4"><div className="flex items-center gap-3"><AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-lg" /><div><div className="flex items-center gap-1.5"><UserName user={user} className="font-semibold" />{renderUserBadge(user)}</div></div></div></td><td className="p-4 font-semibold text-lg font-mono">{formatCurrency(user.walletBalance)}</td><td className="p-4"><button onClick={() => openGrantModal(user)} className="px-3 py-1.5 bg-green-500/20 text-green-300 text-sm font-semibold rounded-md hover:bg-green-500/30">Grant Funds</button></td></tr>))}</tbody>
+                                            </table>
+                                        )}
+                                        {bankingTab === 'loans' && (
+                                            <table className="w-full text-left">
+                                                <thead className="bg-white/5"><tr className="border-b border-white/10 text-sm"><th className="p-4 font-semibold">User</th><th className="p-4 font-semibold">Amount</th><th className="p-4 font-semibold">Reason</th><th className="p-4 font-semibold">Date</th><th className="p-4 font-semibold">Status</th><th className="p-4 font-semibold">Actions</th></tr></thead>
+                                                <tbody>{loans.sort((a,b) => b.requestedAt - a.requestedAt).map(loan => { const user = users.find(u => u.id === loan.userId); if(!user) return null; return(<tr key={loan.id} className="border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors text-sm"><td className="p-4"><div className="flex items-center gap-3"><AvatarWithBorder user={user} containerClasses="w-10 h-10" textClasses="text-lg" /><div><UserName user={user} className="font-semibold" /></div></div></td><td className="p-4 font-mono">{formatCurrency(loan.amount)}</td><td className="p-4 max-w-xs truncate" title={loan.reason}>{loan.reason}</td><td className="p-4 text-slate-400">{new Date(loan.requestedAt).toLocaleDateString()}</td><td className="p-4"><span className={`px-2 py-1 text-xs font-semibold rounded-full capitalize ${loan.status === 'pending' ? 'bg-amber-500/10 text-amber-300' : loan.status === 'approved' ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300'}`}>{loan.status}</span></td><td className="p-4">{loan.status === 'pending' && (<div className="flex items-center gap-2"><button onClick={()=>openLoanActionModal(loan, 'approved')} className="px-3 py-1 bg-green-500/20 text-green-300 rounded-md">Approve</button><button onClick={()=>openLoanActionModal(loan, 'rejected')} className="px-3 py-1 bg-red-500/20 text-red-300 rounded-md">Reject</button></div>)}</td></tr>)})}</tbody>
+                                            </table>
+                                        )}
+                                    </div>
                                 )}
                                 {view === 'groups' && (
                                      <table className="w-full text-left">
@@ -659,6 +699,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = (props) => {
             </Modal>
             <Modal isOpen={isFreezeModalOpen} onClose={closeAllModals} maxWidth="max-w-sm">
                 {selectedUser && (<div><h2 className="text-2xl font-bold mb-4">Freeze {selectedUser.username}'s Account</h2><div className="space-y-4"><div><label className="block text-sm font-medium text-slate-300 mb-1">Duration</label><div className="grid grid-cols-3 gap-2"><select value={freezeType} onChange={e => setFreezeType(e.target.value as any)} className={`col-span-1 ${modalSelectClasses}`}><option value="permanent">Permanent</option><option value="hours">Hours</option><option value="days">Days</option></select><input type="number" value={freezeValue} onChange={e => setFreezeValue(e.target.value)} disabled={freezeType === 'permanent'} placeholder="Duration" className={`col-span-2 ${modalInputClasses} disabled:opacity-50`} /></div></div></div><div className="mt-6 flex justify-end gap-3"><button onClick={closeAllModals} className="px-4 py-2 bg-white/10 rounded-lg">Cancel</button><button onClick={handleFreezeUpdate} disabled={isSubmitting} className="px-4 py-2 bg-red-600 rounded-lg">{isSubmitting ? 'Freezing...' : 'Freeze Account'}</button></div></div>)}
+            </Modal>
+             <Modal isOpen={isLoanActionModalOpen} onClose={closeAllModals} maxWidth="max-w-md">
+                {selectedLoan && loanAction && (
+                    <div>
+                        <h2 className="text-2xl font-bold mb-4 capitalize">{loanAction} Loan Request</h2>
+                        <p className="text-slate-300 mb-4">You are about to <span className={`font-bold ${loanAction === 'approved' ? 'text-green-400' : 'text-red-400'}`}>{loanAction}</span> a loan of <span className="font-bold">{formatCurrency(selectedLoan.amount)}</span> for {users.find(u=>u.id === selectedLoan.userId)?.username}.</p>
+                        <textarea value={adminNotes} onChange={e => setAdminNotes(e.target.value)} placeholder="Add optional admin notes..." rows={3} className={modalTextareaClasses}></textarea>
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button onClick={closeAllModals} className="px-4 py-2 bg-white/10 rounded-lg">Cancel</button>
+                            <button onClick={handleLoanAction} disabled={isSubmitting} className={`px-4 py-2 rounded-lg font-semibold ${loanAction === 'approved' ? 'bg-green-600' : 'bg-red-600'}`}>
+                                {isSubmitting ? 'Submitting...' : `Confirm ${loanAction.charAt(0).toUpperCase() + loanAction.slice(1)}`}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </Modal>
         </>
     );

@@ -81,7 +81,7 @@ export interface Connection {
   updatedAt: number;
 }
 
-export type TransactionType = 'transfer' | 'purchase' | 'admin_grant';
+export type TransactionType = 'transfer' | 'purchase' | 'admin_grant' | 'loan';
 
 export interface Transaction {
   id: string;
@@ -101,6 +101,20 @@ export interface Report {
   timestamp: number;
   status: 'pending' | 'resolved' | 'dismissed';
   chatIdAtTimeOfReport?: string;
+}
+
+// NEW: Banking and Loan types
+export type LoanStatus = 'pending' | 'approved' | 'rejected';
+
+export interface Loan {
+  id: string;
+  userId: string;
+  amount: number;
+  reason: string;
+  status: LoanStatus;
+  requestedAt: number;
+  updatedAt: number;
+  adminNotes?: string;
 }
 // Health check comment
 // N

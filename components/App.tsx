@@ -1,8 +1,9 @@
 
 
 
+
 import React, { useState, useReducer, useEffect } from 'react';
-import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report } from '../types';
+import { User, Chat, Message, Connection, ConnectionStatus, Verification, Transaction, VerificationBadgeType, Report, Loan, LoanStatus } from '../types';
 import GroupLocker from './GroupLocker';
 import ChatRoom from './ChatRoom';
 // FIX: Changed to a named import as AdminPanel does not have a default export.
@@ -37,12 +38,13 @@ const App: React.FC = () => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [loans, setLoans] = useState<Loan[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loggedInUsers, setLoggedInUsers] = useState<User[]>([]);
 
   const fetchData = async () => {
     try {
-        const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData] = await Promise.all([
+        const [usersData, chatsData, messagesData, currentUserData, loggedInUsersData, connectionsData, transactionsData, reportsData, loansData] = await Promise.all([
             db.getUsers(),
             db.getChats(),
             db.getMessages(),
@@ -51,6 +53,7 @@ const App: React.FC = () => {
             db.getConnections(),
             db.getTransactions(),
             db.getReports(),
+            db.getLoans(),
         ]);
         setUsers(usersData);
         setChats(chatsData);
@@ -60,6 +63,7 @@ const App: React.FC = () => {
         setConnections(connectionsData);
         setTransactions(transactionsData);
         setReports(reportsData);
+        setLoans(loansData);
     } catch (error) {
         console.error("Failed to fetch data:", error);
         // If there's an auth error (e.g., token expired), we might want to log the user out.
@@ -282,6 +286,22 @@ const App: React.FC = () => {
     setReports(await db.getReports());
   };
 
+  // --- Loan Handlers ---
+  const handleApplyForLoan = async (amount: number, reason: string) => {
+    if (!currentUser) return { success: false, message: 'You must be logged in.' };
+    const result = await db.addLoanApplication(currentUser.id, amount, reason);
+    if (result) {
+        await fetchData();
+        return { success: true, message: 'Loan application submitted successfully.' };
+    }
+    return { success: false, message: 'Failed to submit loan application.' };
+  };
+
+  const handleUpdateLoanStatus = async (loanId: string, status: LoanStatus, adminNotes?: string) => {
+    await db.updateLoanStatus(loanId, status, adminNotes);
+    await fetchData();
+  };
+
 
   return (
     <div className="text-white min-h-screen w-full font-sans overflow-hidden">
@@ -295,6 +315,7 @@ const App: React.FC = () => {
             connections={connections}
             transactions={transactions}
             reports={reports}
+            loans={loans}
             onLogout={handleLogout}
             onUpdateUserProfile={handleUpdateUserProfile}
             onResetUserPassword={handleResetUserPassword}
@@ -310,6 +331,7 @@ const App: React.FC = () => {
             onAdminGrantFunds={handleAdminGrantFunds}
             onAdminUpdateUserFreezeStatus={handleAdminUpdateUserFreezeStatus}
             onUpdateReportStatus={handleUpdateReportStatus}
+            onUpdateLoanStatus={handleUpdateLoanStatus}
           />
         ) : (
           <ChatRoom
@@ -319,6 +341,7 @@ const App: React.FC = () => {
             messages={messages}
             connections={connections}
             transactions={transactions}
+            loans={loans}
             loggedInUsers={loggedInUsers}
             onSendMessage={handleSendMessage}
             onCreateChat={handleCreateChat}
@@ -341,6 +364,7 @@ const App: React.FC = () => {
             onEquipCustomization={handleEquipCustomization}
             onReportUser={handleReportUser}
             onDeleteUserChats={handleDeleteUserChats}
+            onApplyForLoan={handleApplyForLoan}
           />
         )
       ) : (

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification } from '../types';
+import type { Chat, Message, User, Connection, Transaction, VerificationBadgeType, Verification, Loan, LoanStatus } from '../types';
 import { ChatType, ConnectionStatus } from '../types';
-import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon, ChatBubbleLeftRightIcon, PaintBrushIcon, FlagIcon, PencilSquareIcon, CheckIcon, TrashIcon, SparklesIcon } from './icons';
+import { ArrowLeftOnRectangleIcon, MagnifyingGlassIcon, PaperAirplaneIcon, UsersIcon, UserCircleIcon, ArrowLeftIcon, InstagramIcon, PlusCircleIcon, XMarkIcon, LockClosedIcon, ChevronDownIcon, UserPlusIcon, CheckCircleIcon, BellIcon, BanIcon, CheckBadgeIcon, PencilIcon, WalletIcon, ShoppingCartIcon, CurrencyDollarIcon, InformationCircleIcon, ChatBubbleLeftRightIcon, PaintBrushIcon, FlagIcon, PencilSquareIcon, CheckIcon, TrashIcon, SparklesIcon, BanknotesIcon } from './icons';
 import ChatMessage from './ChatMessage';
 import { db, MARKETPLACE_ITEMS } from './db';
 
@@ -13,6 +13,7 @@ interface ChatRoomProps {
   messages: Message[];
   connections: Connection[];
   transactions: Transaction[];
+  loans: Loan[];
   loggedInUsers: User[];
   onSendMessage: (chatId: string, text: string) => Promise<void>;
   onCreateChat: (targetUser: User) => Promise<Chat>;
@@ -30,6 +31,7 @@ interface ChatRoomProps {
   onEquipCustomization: (type: 'border' | 'nameColor', itemId: string | undefined) => Promise<void>;
   onReportUser: (reportedUserId: string, reason: string, chatId?: string) => Promise<void>;
   onDeleteUserChats: (chatIds: string[]) => Promise<void>;
+  onApplyForLoan: (amount: number, reason: string) => Promise<{success: boolean, message: string}>;
 }
 
 // --- Helper Components & Functions ---
@@ -200,17 +202,20 @@ const ProfileModal: React.FC<{
     currentUser: User;
     users: User[];
     transactions: Transaction[];
+    loans: Loan[];
     onUpdateProfile: (params: { avatar: string, bio: string }) => Promise<void>;
     onRequestVerification: (userId: string) => Promise<void>;
     onTransferFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
     onPurchaseVerification: (badgeType: VerificationBadgeType, duration: number | 'permanent', cost: number) => Promise<{success: boolean, message: string}>;
     onPurchaseCosmetic: (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => Promise<{success: boolean, message: string}>;
     onEquipCustomization: (type: 'border' | 'nameColor', itemId: string | undefined) => Promise<void>;
+    onApplyForLoan: (amount: number, reason: string) => Promise<{success: boolean, message: string}>;
     isAccountFrozen: boolean;
 }> = (props) => {
-    const { isOpen, onClose, currentUser, users, transactions, onUpdateProfile, onRequestVerification, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, isAccountFrozen } = props;
+    const { isOpen, onClose, currentUser, users, transactions, loans, onUpdateProfile, onRequestVerification, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, onApplyForLoan, isAccountFrozen } = props;
     
-    const [view, setView] = useState<'profile' | 'wallet' | 'market' | 'customize'>('profile');
+    const [view, setView] = useState<'profile' | 'bank' | 'market' | 'customize'>('profile');
+    const [bankView, setBankView] = useState<'wallet' | 'loans'>('wallet');
     const [marketView, setMarketView] = useState<'badges' | 'cosmetics'>('badges');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -223,11 +228,20 @@ const ProfileModal: React.FC<{
     const [transferAmount, setTransferAmount] = useState('');
     const [transferMessage, setTransferMessage] = useState({ type: '', text: '' });
     
+    // Loan State
+    const [loanAmount, setLoanAmount] = useState('');
+    const [loanReason, setLoanReason] = useState('');
+    const [loanMessage, setLoanMessage] = useState({ type: '', text: '' });
+    
     const userTransactions = useMemo(() => {
         return transactions
             .filter(t => t.fromUserId === currentUser.id || t.toUserId === currentUser.id)
             .sort((a, b) => b.timestamp - a.timestamp);
     }, [transactions, currentUser.id]);
+    
+    const userLoans = useMemo(() => {
+        return loans.filter(l => l.userId === currentUser.id).sort((a,b) => b.requestedAt - a.requestedAt);
+    }, [loans, currentUser.id]);
 
     const allOtherUsers = useMemo(() => {
         return users.filter(u => u.id !== currentUser.id && !u.isAdmin);
@@ -247,6 +261,13 @@ const ProfileModal: React.FC<{
         if (isOpen) {
             setAvatar(currentUser.avatar);
             setBio(currentUser.bio || '');
+        } else {
+             // Reset views on close
+            setTimeout(() => {
+                setView('profile');
+                setBankView('wallet');
+                setMarketView('badges');
+            }, 300);
         }
     }, [currentUser, isOpen]);
 
@@ -286,6 +307,26 @@ const ProfileModal: React.FC<{
         }
         setIsSubmitting(false);
     };
+
+    const handleLoanApplication = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const amount = parseFloat(loanAmount);
+        if (!amount || amount <= 0 || !loanReason.trim()) {
+            setLoanMessage({type: 'error', text: 'Please enter a valid amount and reason.'});
+            return;
+        }
+        setIsSubmitting(true);
+        setLoanMessage({ type: '', text: '' });
+        const result = await onApplyForLoan(amount, loanReason.trim());
+        if (result.success) {
+            setLoanMessage({type: 'success', text: result.message});
+            setLoanAmount('');
+            setLoanReason('');
+        } else {
+            setLoanMessage({type: 'error', text: result.message});
+        }
+        setIsSubmitting(false);
+    }
 
     const handlePurchaseBadge = async (badge: VerificationBadgeType, duration: string, cost: number) => {
         if (currentUser.walletBalance < cost) {
@@ -344,7 +385,7 @@ const ProfileModal: React.FC<{
             <div className="border-b border-white/10 mb-4">
                 <nav className="flex -mb-px space-x-1 sm:space-x-2">
                     <button onClick={() => setView('profile')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'profile' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><PencilIcon className="w-4 h-4" /> Profile</button>
-                    <button onClick={() => setView('wallet')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'wallet' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><WalletIcon className="w-4 h-4" /> Wallet</button>
+                    <button onClick={() => setView('bank')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'bank' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><BanknotesIcon className="w-4 h-4" /> Bank</button>
                     <button onClick={() => setView('market')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'market' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><ShoppingCartIcon className="w-4 h-4" /> Market</button>
                     <button onClick={() => setView('customize')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'customize' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><PaintBrushIcon className="w-4 h-4" /> Customize</button>
                 </nav>
@@ -392,43 +433,83 @@ const ProfileModal: React.FC<{
                 </div>
                 </>
             )}
-            {view === 'wallet' && (
-                <>
-                <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 p-4 rounded-xl mb-4 text-center">
-                    <p className="text-sm text-slate-300">Current Balance</p>
-                    <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentUser.walletBalance)}</p>
-                </div>
-                <form onSubmit={handleTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
-                    <h3 className="font-semibold text-lg text-white">Send Funds</h3>
-                    <UserSelector
-                        users={allOtherUsers}
-                        selectedUserId={transferUser}
-                        onSelectUser={setTransferUser}
-                        disabled={isAccountFrozen}
-                    />
-                    <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
-                    {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
-                    <button type="submit" disabled={isSubmitting || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
-                        {isSubmitting ? 'Sending...' : 'Send'}
-                    </button>
-                </form>
-                 <div className="mt-4">
-                    <h3 className="font-semibold text-lg mb-2 text-white">Transaction History</h3>
-                    <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-2 -mr-2">
-                        {userTransactions.length > 0 ? userTransactions.map(t => {
-                            return (
-                                <div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center">
-                                    <div>
-                                        <p className="font-semibold">{t.description}</p>
-                                        <p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p>
-                                    </div>
-                                    <p className={`font-bold ${t.fromUserId === currentUser.id ? 'text-red-400' : 'text-green-400'}`}>{t.fromUserId === currentUser.id ? '-' : '+'}{formatCurrency(t.amount)}</p>
-                                </div>
-                            )
-                        }) : <p className="text-sm text-center text-slate-500 p-4">No transactions yet.</p>}
+            {view === 'bank' && (
+                <div className="max-h-[28rem] overflow-y-auto custom-scrollbar pr-2 -mr-2">
+                    <div className="flex justify-center gap-2 mb-4 p-1 bg-black/20 rounded-full border border-white/10 sticky top-0 backdrop-blur-sm z-10">
+                        <button onClick={() => setBankView('wallet')} className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${bankView === 'wallet' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Wallet</button>
+                        <button onClick={() => setBankView('loans')} className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${bankView === 'loans' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Loans</button>
                     </div>
-                 </div>
-                </>
+
+                    {bankView === 'wallet' && (
+                        <>
+                            <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 p-4 rounded-xl mb-4 text-center">
+                                <p className="text-sm text-slate-300">Current Balance</p>
+                                <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentUser.walletBalance)}</p>
+                            </div>
+                            <form onSubmit={handleTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
+                                <h3 className="font-semibold text-lg text-white">Send Funds</h3>
+                                <UserSelector
+                                    users={allOtherUsers}
+                                    selectedUserId={transferUser}
+                                    onSelectUser={setTransferUser}
+                                    disabled={isAccountFrozen}
+                                />
+                                <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
+                                {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
+                                <button type="submit" disabled={isSubmitting || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                                    {isSubmitting ? 'Sending...' : 'Send'}
+                                </button>
+                            </form>
+                             <div className="mt-4">
+                                <h3 className="font-semibold text-lg mb-2 text-white">Transaction History</h3>
+                                <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-2 -mr-2">
+                                    {userTransactions.length > 0 ? userTransactions.map(t => {
+                                        const isCredit = t.toUserId === currentUser.id;
+                                        return (
+                                            <div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-semibold">{t.description}</p>
+                                                    <p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p>
+                                                </div>
+                                                <p className={`font-bold ${isCredit ? 'text-green-400' : 'text-red-400'}`}>{isCredit ? '+' : '-'}{formatCurrency(t.amount)}</p>
+                                            </div>
+                                        )
+                                    }) : <p className="text-sm text-center text-slate-500 p-4">No transactions yet.</p>}
+                                </div>
+                             </div>
+                        </>
+                    )}
+                    {bankView === 'loans' && (
+                        <>
+                           <form onSubmit={handleLoanApplication} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10 mb-4">
+                                <h3 className="font-semibold text-lg text-white">Apply for a Loan</h3>
+                                <input type="number" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} placeholder="Loan Amount (USD)" min="1" step="1" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
+                                <textarea value={loanReason} onChange={e => setLoanReason(e.target.value)} placeholder="Reason for loan..." rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}></textarea>
+                                {loanMessage.text && <p className={`text-sm text-center ${loanMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{loanMessage.text}</p>}
+                                <button type="submit" disabled={isSubmitting || isAccountFrozen} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                                    {isSubmitting ? 'Submitting...' : 'Submit Application'}
+                                </button>
+                           </form>
+                           <div>
+                                <h3 className="font-semibold text-lg mb-2 text-white">Loan History</h3>
+                                <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-2">
+                                     {userLoans.length > 0 ? userLoans.map(loan => (
+                                         <div key={loan.id} className="text-sm p-3 bg-white/5 rounded-lg">
+                                             <div className="flex justify-between items-start">
+                                                 <div>
+                                                     <p className="font-bold text-lg text-white">{formatCurrency(loan.amount)}</p>
+                                                     <p className="text-xs text-slate-400">{new Date(loan.requestedAt).toLocaleDateString()}</p>
+                                                 </div>
+                                                 <span className={`px-2 py-1 text-xs font-semibold rounded-full capitalize ${loan.status === 'pending' ? 'bg-amber-500/10 text-amber-300' : loan.status === 'approved' ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300'}`}>{loan.status}</span>
+                                             </div>
+                                             <p className="text-slate-300 mt-2 text-xs italic">"{loan.reason}"</p>
+                                         </div>
+                                     )) : <p className="text-sm text-center text-slate-500 p-4">No loan applications yet.</p>}
+                                </div>
+                           </div>
+                        </>
+                    )}
+                </div>
             )}
             {view === 'market' && (
                 <div className="space-y-4 max-h-[28rem] overflow-y-auto custom-scrollbar pr-2 -mr-2">
@@ -804,115 +885,116 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeChat, currentUser, users, cha
 };
 
 const ChatRoom: React.FC<ChatRoomProps> = (props) => {
-    const { currentUser, users, chats, messages, connections, transactions, onSendMessage, onCreateChat, onLogout, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, onReportUser, onDeleteUserChats } = props;
-    
+    const { currentUser, users, chats, messages, connections, transactions, loans, onSendMessage, onCreateChat, onLogout, onSendRequest, onUpdateConnection, onRequestVerification, onUpdateUserProfile, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, onReportUser, onDeleteUserChats, onApplyForLoan, onCreateGroupChat } = props;
+
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [newMessage, setNewMessage] = useState('');
-    const [sidebarView, setSidebarView] = useState<'chats' | 'users' | 'requests'>('chats');
     const [searchTerm, setSearchTerm] = useState('');
+    const [sidebarView, setSidebarView] = useState<'chats' | 'users' | 'requests'>('chats');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
     const [userToReport, setUserToReport] = useState<User | null>(null);
     const [reportReason, setReportReason] = useState('');
-    const messagesEndRef = useRef<HTMLDivElement>(null);
-    const [isUserSwitcherOpen, setIsUserSwitcherOpen] = useState(false);
-    const userSwitcherRef = useRef<HTMLDivElement>(null);
-    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Multi-delete state
     const [isMultiDeleteMode, setIsMultiDeleteMode] = useState(false);
     const [chatsToDelete, setChatsToDelete] = useState<string[]>([]);
     
-    // AI Feature State
+    // AI feature state
     const [isAiLoading, setIsAiLoading] = useState(false);
     const [isAiMenuOpen, setIsAiMenuOpen] = useState(false);
     const [isToneSubMenuOpen, setIsToneSubMenuOpen] = useState(false);
     const aiButtonRef = useRef<HTMLButtonElement>(null);
     const aiMenuRef = useRef<HTMLDivElement>(null);
+    
+    // Create Group Modal State
+    const [isGroupCreateModalOpen, setIsGroupCreateModalOpen] = useState(false);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    };
 
+    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); };
+    useEffect(scrollToBottom, [messages, activeChatId]);
+    
     useEffect(() => {
-        scrollToBottom();
-    }, [messages, activeChatId]);
-
+        if (activeChatId) setIsMobileSidebarOpen(false);
+    }, [activeChatId]);
+    
     useEffect(() => {
+        // Close AI menu if clicking outside
         const handleClickOutside = (event: MouseEvent) => {
-            if (userSwitcherRef.current && !userSwitcherRef.current.contains(event.target as Node)) {
-                setIsUserSwitcherOpen(false);
-            }
-            if (isAiMenuOpen && aiMenuRef.current && !aiMenuRef.current.contains(event.target as Node) && aiButtonRef.current && !aiButtonRef.current.contains(event.target as Node)) {
+            if (aiMenuRef.current && !aiMenuRef.current.contains(event.target as Node) && aiButtonRef.current && !aiButtonRef.current.contains(event.target as Node)) {
                 setIsAiMenuOpen(false);
                 setIsToneSubMenuOpen(false);
             }
         };
-        document.addEventListener("mousedown", handleClickOutside);
-        return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [isAiMenuOpen]);
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const activeChat = useMemo(() => chats.find(c => c.id === activeChatId), [chats, activeChatId]);
+    const chatMessages = useMemo(() => messages.filter(m => m.chatId === activeChatId), [messages, activeChatId]);
+    
+    const friendRequests = useMemo(() => connections.filter(c => c.toUserId === currentUser.id && c.status === ConnectionStatus.PENDING), [connections, currentUser.id]);
 
     const isAccountFrozen = useMemo(() => {
-        return !!(currentUser.isFrozen && (!currentUser.frozenUntil || currentUser.frozenUntil > Date.now()));
-    }, [currentUser]);
-
-    const userChats = useMemo(() => {
+        if (currentUser.isFrozen) {
+            if (currentUser.frozenUntil && currentUser.frozenUntil < Date.now()) {
+                // Should be unfrozen by a backend process, but we can handle it client-side for now
+                return false;
+            }
+            return true;
+        }
+        return false;
+    }, [currentUser.isFrozen, currentUser.frozenUntil]);
+    
+     const filteredChats = useMemo(() => {
         return chats
-            .filter(c => c.members.includes(currentUser.id))
+            .filter(chat => chat.members.includes(currentUser.id))
             .map(chat => {
-                const lastMessage = messages
-                    .filter(m => m.chatId === chat.id)
-                    .sort((a, b) => b.timestamp - a.timestamp)[0];
+                const lastMessage = messages.filter(m => m.chatId === chat.id).sort((a,b) => b.timestamp - a.timestamp)[0];
                 return { ...chat, lastMessage };
             })
-            .sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
-    }, [chats, messages, currentUser.id]);
-
-    const activeChat = useMemo(() => {
-        return chats.find(c => c.id === activeChatId);
-    }, [chats, activeChatId]);
-
-    const chatMessages = useMemo(() => {
-        if (!activeChatId) return [];
-        return messages.filter(m => m.chatId === activeChatId).sort((a, b) => a.timestamp - b.timestamp);
-    }, [messages, activeChatId]);
-    
-    const otherUsers = useMemo(() => {
-        return users.filter(u => u.id !== currentUser.id && !u.isAdmin);
-    }, [users, currentUser.id]);
-
-    const friendRequests = useMemo(() => {
-        return connections.filter(c => c.toUserId === currentUser.id && c.status === ConnectionStatus.PENDING);
-    }, [connections, currentUser.id]);
+            .sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0))
+            .filter(chat => getChatDisplayName(chat, currentUser, users).toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [chats, messages, currentUser, users, searchTerm]);
 
     const filteredUsers = useMemo(() => {
-        return otherUsers.filter(u => u.username.toLowerCase().includes(searchTerm.toLowerCase()));
-    }, [otherUsers, searchTerm]);
+        return users.filter(user => user.id !== currentUser.id && !user.isAdmin && user.username.toLowerCase().includes(searchTerm.toLowerCase()));
+    }, [users, currentUser.id, searchTerm]);
     
-    const filteredChats = useMemo(() => {
-        return userChats.filter(c => getChatDisplayName(c, currentUser, users).toLowerCase().includes(searchTerm.toLowerCase()));
-    }, [userChats, searchTerm, currentUser, users]);
-
     const handleSelectChat = (chatId: string) => {
         if (isMultiDeleteMode) {
-            toggleChatToDelete(chatId);
+            setChatsToDelete(prev => prev.includes(chatId) ? prev.filter(id => id !== chatId) : [...prev, chatId]);
         } else {
             setActiveChatId(chatId);
-            setIsMobileSidebarOpen(false);
+        }
+    };
+    
+    const handleDeleteSelectedChats = async () => {
+        if (chatsToDelete.length === 0) return;
+        if (window.confirm(`Are you sure you want to delete ${chatsToDelete.length} chat(s)? This action cannot be undone.`)) {
+            await onDeleteUserChats(chatsToDelete);
+            setChatsToDelete([]);
+            setIsMultiDeleteMode(false);
+            if (activeChatId && chatsToDelete.includes(activeChatId)) {
+                setActiveChatId(null);
+            }
         }
     };
 
+    const handleSendMessageSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newMessage.trim() || !activeChatId) return;
+        await onSendMessage(activeChatId, newMessage);
+        setNewMessage('');
+    };
+    
     const handleCreateNewChat = async (targetUser: User) => {
         const newChat = await onCreateChat(targetUser);
         setActiveChatId(newChat.id);
         setSidebarView('chats');
-        setIsMobileSidebarOpen(false);
-    };
-
-    const handleSendMessageSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (newMessage.trim() && activeChatId && !isAccountFrozen) {
-            onSendMessage(activeChatId, newMessage.trim());
-            setNewMessage('');
-        }
     };
     
     const openReportModal = (user: User) => {
@@ -920,162 +1002,226 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
         setIsReportModalOpen(true);
     };
 
-    const handleReportSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (userToReport && reportReason.trim()) {
-            await onReportUser(userToReport.id, reportReason.trim(), activeChat?.id);
-            setReportReason('');
-            setUserToReport(null);
-            setIsReportModalOpen(false);
-            alert('Report submitted successfully.');
-        }
+    const handleReportSubmit = async () => {
+        if (!userToReport || !reportReason.trim()) return;
+        setIsSubmitting(true);
+        await onReportUser(userToReport.id, reportReason, activeChatId || undefined);
+        setIsSubmitting(false);
+        setReportReason('');
+        setUserToReport(null);
+        setIsReportModalOpen(false);
+        alert('Report submitted successfully.');
     };
     
-    const toggleChatToDelete = (chatId: string) => {
-        setChatsToDelete(prev => prev.includes(chatId) ? prev.filter(id => id !== chatId) : [...prev, chatId]);
-    };
-
-    const handleDeleteSelectedChats = async () => {
-        if (chatsToDelete.length > 0 && window.confirm(`Are you sure you want to delete ${chatsToDelete.length} chat(s)? This action cannot be undone.`)) {
-            await onDeleteUserChats(chatsToDelete);
-            setChatsToDelete([]);
-            setIsMultiDeleteMode(false);
-            if (chatsToDelete.includes(activeChatId ?? '')) {
-                setActiveChatId(null);
-            }
-        }
-    };
-
-    // --- AI Feature Logic ---
-    const toggleAiMenu = () => {
-        setIsAiMenuOpen(prev => !prev);
-        setIsToneSubMenuOpen(false);
+    const handleCreateGroupSubmit = async (params: { memberIds: string[], groupName: string }) => {
+        await onCreateGroupChat(params);
+        setIsGroupCreateModalOpen(false);
+        setSidebarView('chats');
     };
     
+    // AI Magic Wand Handlers
+    const toggleAiMenu = () => setIsAiMenuOpen(prev => !prev);
+
     const handleAiAction = async (action: 'improve' | 'shorter' | 'longer' | 'tone', tone?: 'formal' | 'casual' | 'funny' | 'poetic') => {
-        if (!newMessage.trim() || isAiLoading) return;
-
+        if (!newMessage.trim()) return;
+        
         setIsAiMenuOpen(false);
         setIsToneSubMenuOpen(false);
         setIsAiLoading(true);
 
         let prompt = '';
-        const originalText = `Original text: "${newMessage}"`;
-
-        switch (action) {
-            case 'improve':
-                prompt = `Improve the grammar, spelling, and clarity of the following text, while keeping the original meaning. Only return the improved text.\n${originalText}`;
-                break;
-            case 'shorter':
-                prompt = `Make the following text more concise. Only return the shorter text.\n${originalText}`;
-                break;
-            case 'longer':
-                prompt = `Expand on the following text, adding more detail and making it more descriptive. Only return the longer text.\n${originalText}`;
-                break;
-            case 'tone':
-                if (tone) {
-                    prompt = `Rewrite the following text in a ${tone} tone. Only return the rewritten text.\n${originalText}`;
-                }
-                break;
-        }
-
-        if (!prompt) {
-            setIsAiLoading(false);
-            return;
+        switch(action) {
+            case 'improve': prompt = `Improve the following text: "${newMessage}"`; break;
+            case 'shorter': prompt = `Make the following text shorter: "${newMessage}"`; break;
+            case 'longer': prompt = `Make the following text longer: "${newMessage}"`; break;
+            case 'tone': prompt = `Change the tone of the following text to ${tone}: "${newMessage}"`; break;
         }
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
             const response = await ai.models.generateContent({
                 model: 'gemini-2.5-flash',
-                contents: prompt,
+                contents: prompt
             });
-            setNewMessage(response.text.trim());
+            const text = response.text.trim().replace(/^"(.*)"$/, '$1'); // Remove surrounding quotes if any
+            setNewMessage(text);
         } catch (error) {
-            console.error("Gemini API error:", error);
-            alert("Sorry, the AI assistant could not process your request at this time.");
+            console.error("AI Action Failed:", error);
+            // You might want to show an error to the user here
         } finally {
             setIsAiLoading(false);
         }
     };
 
+    const CreateGroupModalContent: React.FC<{
+        currentUser: User,
+        connections: Connection[],
+        users: User[],
+        onCreateGroup: (params: { memberIds: string[], groupName: string }) => void,
+        onClose: () => void
+    }> = ({ currentUser, connections, users, onCreateGroup, onClose }) => {
+        const [groupName, setGroupName] = useState('');
+        const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+        const [isSubmitting, setIsSubmitting] = useState(false);
+
+        const friends = useMemo(() => {
+            return connections
+                .filter(c => c.status === ConnectionStatus.ACCEPTED && (c.fromUserId === currentUser.id || c.toUserId === currentUser.id))
+                .map(c => c.fromUserId === currentUser.id ? c.toUserId : c.fromUserId)
+                .map(friendId => users.find(u => u.id === friendId))
+                .filter((u): u is User => !!u);
+        }, [connections, currentUser.id, users]);
+
+        const handleToggleMember = (userId: string) => {
+            setSelectedMembers(prev => prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]);
+        };
+
+        const handleSubmit = async () => {
+            if (!groupName.trim() || selectedMembers.length === 0) {
+                alert("Please provide a group name and select at least one member.");
+                return;
+            }
+            setIsSubmitting(true);
+            await onCreateGroup({ groupName, memberIds: selectedMembers });
+            setIsSubmitting(false);
+        };
+
+        return (
+            <>
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-2xl font-bold text-white">Create New Group</h2>
+                    <button onClick={onClose} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10 transition-colors"><XMarkIcon /></button>
+                </div>
+                <div className="space-y-4">
+                    <input
+                        type="text"
+                        value={groupName}
+                        onChange={e => setGroupName(e.target.value)}
+                        placeholder="Group Name"
+                        className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    />
+                    <div>
+                        <h3 className="text-lg font-semibold mb-2 text-slate-300">Select Members</h3>
+                        <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-2 p-2 bg-black/20 rounded-lg">
+                            {friends.map(friend => (
+                                <div key={friend.id} onClick={() => handleToggleMember(friend.id)} className="flex items-center gap-3 p-2 rounded-md cursor-pointer hover:bg-white/10 transition-colors">
+                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center border-2 flex-shrink-0 ${selectedMembers.includes(friend.id) ? 'bg-cyan-500 border-cyan-400' : 'border-slate-500 bg-white/10'}`}>
+                                        {selectedMembers.includes(friend.id) && <CheckIcon className="w-3 h-3 text-white" />}
+                                    </div>
+                                    <AvatarWithBorder user={friend} containerClasses="w-8 h-8" textClasses="text-sm" statusClasses="h-2.5 w-2.5 bottom-0 right-0" />
+                                    <UserName user={friend} className="font-semibold" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <button onClick={handleSubmit} disabled={isSubmitting || !groupName.trim() || selectedMembers.length === 0} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                        {isSubmitting ? 'Creating...' : 'Create Group'}
+                    </button>
+                </div>
+            </>
+        );
+    };
+
     return (
-        <>
+        <div className="flex h-screen w-full font-sans bg-slate-900/50">
+            <Sidebar
+                currentUser={currentUser}
+                setIsProfileModalOpen={setIsProfileModalOpen}
+                onLogout={onLogout}
+                searchTerm={searchTerm}
+                setSearchTerm={setSearchTerm}
+                sidebarView={sidebarView}
+                setSidebarView={setSidebarView}
+                friendRequests={friendRequests}
+                isMultiDeleteMode={isMultiDeleteMode}
+                setIsMultiDeleteMode={setIsMultiDeleteMode}
+                isMobileSidebarOpen={isMobileSidebarOpen}
+                filteredChats={filteredChats}
+                activeChatId={activeChatId}
+                handleSelectChat={handleSelectChat}
+                chatsToDelete={chatsToDelete}
+                users={users}
+                filteredUsers={filteredUsers}
+                connections={connections}
+                onSendRequest={onSendRequest}
+                handleCreateNewChat={handleCreateNewChat}
+                onUpdateConnection={onUpdateConnection}
+                handleDeleteSelectedChats={handleDeleteSelectedChats}
+            />
+
+            <ChatArea
+                activeChat={activeChat}
+                currentUser={currentUser}
+                users={users}
+                chatMessages={chatMessages}
+                messagesEndRef={messagesEndRef}
+                isAccountFrozen={isAccountFrozen}
+                newMessage={newMessage}
+                setNewMessage={setNewMessage}
+                handleSendMessageSubmit={handleSendMessageSubmit}
+                setIsMobileSidebarOpen={setIsMobileSidebarOpen}
+                openReportModal={openReportModal}
+                isAiLoading={isAiLoading}
+                isAiMenuOpen={isAiMenuOpen}
+                isToneSubMenuOpen={isToneSubMenuOpen}
+                setIsToneSubMenuOpen={setIsToneSubMenuOpen}
+                aiButtonRef={aiButtonRef}
+                aiMenuRef={aiMenuRef}
+                toggleAiMenu={toggleAiMenu}
+                handleAiAction={handleAiAction}
+            />
+            
             <ProfileModal
                 isOpen={isProfileModalOpen}
                 onClose={() => setIsProfileModalOpen(false)}
                 currentUser={currentUser}
                 users={users}
                 transactions={transactions}
+                loans={loans}
                 onUpdateProfile={onUpdateUserProfile}
                 onRequestVerification={onRequestVerification}
                 onTransferFunds={onTransferFunds}
                 onPurchaseVerification={onPurchaseVerification}
                 onPurchaseCosmetic={onPurchaseCosmetic}
                 onEquipCustomization={onEquipCustomization}
+                onApplyForLoan={onApplyForLoan}
                 isAccountFrozen={isAccountFrozen}
             />
-            <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)}>
-                <form onSubmit={handleReportSubmit}>
-                    <h2 className="text-2xl font-bold mb-4">Report {userToReport?.username}</h2>
-                    <p className="text-sm text-slate-400 mb-4">Please provide a reason for your report. Your report will be sent to the administrators for review.</p>
-                    <textarea value={reportReason} onChange={e => setReportReason(e.target.value)} rows={4} placeholder="Reason for reporting..." className="w-full bg-white/5 border border-white/10 rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-red-500"></textarea>
-                    <div className="mt-6 flex justify-end gap-3">
-                        <button type="button" onClick={() => setIsReportModalOpen(false)} className="px-5 py-2.5 bg-white/10 hover:bg-white/20 rounded-lg font-semibold">Cancel</button>
-                        <button type="submit" disabled={!reportReason.trim()} className="px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg font-semibold disabled:bg-slate-600">Submit Report</button>
-                    </div>
-                </form>
+
+            <Modal isOpen={isReportModalOpen} onClose={() => setIsReportModalOpen(false)} maxWidth="max-w-md">
+                {userToReport && (
+                     <>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-2xl font-bold text-white">Report {userToReport.username}</h2>
+                            <button onClick={() => setIsReportModalOpen(false)} className="p-1 text-slate-400 rounded-full hover:text-white hover:bg-white/10 transition-colors"><XMarkIcon /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <textarea
+                                value={reportReason}
+                                onChange={e => setReportReason(e.target.value)}
+                                rows={4}
+                                placeholder={`Please provide a reason for reporting ${userToReport.username}...`}
+                                className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                            />
+                            <button onClick={handleReportSubmit} disabled={!reportReason.trim() || isSubmitting} className="w-full px-5 py-2.5 bg-red-600 hover:bg-red-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">
+                                {isSubmitting ? 'Submitting...' : 'Submit Report'}
+                            </button>
+                        </div>
+                    </>
+                )}
             </Modal>
-            <div className="flex h-screen w-full font-sans overflow-hidden animated-gradient">
-                <Sidebar
+            
+            <Modal isOpen={isGroupCreateModalOpen} onClose={() => setIsGroupCreateModalOpen(false)} maxWidth="max-w-md">
+                <CreateGroupModalContent
                     currentUser={currentUser}
-                    setIsProfileModalOpen={setIsProfileModalOpen}
-                    onLogout={onLogout}
-                    searchTerm={searchTerm}
-                    setSearchTerm={setSearchTerm}
-                    sidebarView={sidebarView}
-                    setSidebarView={setSidebarView}
-                    friendRequests={friendRequests}
-                    isMultiDeleteMode={isMultiDeleteMode}
-                    setIsMultiDeleteMode={setIsMultiDeleteMode}
-                    isMobileSidebarOpen={isMobileSidebarOpen}
-                    filteredChats={filteredChats}
-                    activeChatId={activeChatId}
-                    handleSelectChat={handleSelectChat}
-                    chatsToDelete={chatsToDelete}
-                    users={users}
-                    filteredUsers={filteredUsers}
                     connections={connections}
-                    onSendRequest={onSendRequest}
-                    handleCreateNewChat={handleCreateNewChat}
-                    onUpdateConnection={onUpdateConnection}
-                    handleDeleteSelectedChats={handleDeleteSelectedChats}
-                />
-                <ChatArea
-                    activeChat={activeChat}
-                    currentUser={currentUser}
                     users={users}
-                    chatMessages={chatMessages}
-                    messagesEndRef={messagesEndRef}
-                    isAccountFrozen={isAccountFrozen}
-                    newMessage={newMessage}
-                    setNewMessage={setNewMessage}
-                    handleSendMessageSubmit={handleSendMessageSubmit}
-                    setIsMobileSidebarOpen={setIsMobileSidebarOpen}
-                    openReportModal={openReportModal}
-                    isAiLoading={isAiLoading}
-                    isAiMenuOpen={isAiMenuOpen}
-                    isToneSubMenuOpen={isToneSubMenuOpen}
-                    setIsToneSubMenuOpen={setIsToneSubMenuOpen}
-                    aiButtonRef={aiButtonRef}
-                    aiMenuRef={aiMenuRef}
-                    toggleAiMenu={toggleAiMenu}
-                    handleAiAction={handleAiAction}
+                    onCreateGroup={handleCreateGroupSubmit}
+                    onClose={() => setIsGroupCreateModalOpen(false)}
                 />
-            </div>
-        </>
+            </Modal>
+        </div>
     );
 };
+
 export default ChatRoom;
-// Health check comment
-// N
