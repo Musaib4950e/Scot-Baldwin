@@ -195,33 +195,18 @@ const Modal: React.FC<{ isOpen: boolean; onClose: () => void; children: React.Re
     );
 }
 
-// --- Profile, Wallet & Marketplace Modal ---
-const ProfileModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
+// NEW: Bank Panel for Sidebar
+const UserBankPanel: React.FC<{
     currentUser: User;
     users: User[];
     transactions: Transaction[];
     loans: Loan[];
-    onUpdateProfile: (params: { avatar: string, bio: string }) => Promise<void>;
-    onRequestVerification: (userId: string) => Promise<void>;
     onTransferFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
-    onPurchaseVerification: (badgeType: VerificationBadgeType, duration: number | 'permanent', cost: number) => Promise<{success: boolean, message: string}>;
-    onPurchaseCosmetic: (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => Promise<{success: boolean, message: string}>;
-    onEquipCustomization: (type: 'border' | 'nameColor', itemId: string | undefined) => Promise<void>;
     onApplyForLoan: (amount: number, reason: string) => Promise<{success: boolean, message: string}>;
     isAccountFrozen: boolean;
-}> = (props) => {
-    const { isOpen, onClose, currentUser, users, transactions, loans, onUpdateProfile, onRequestVerification, onTransferFunds, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, onApplyForLoan, isAccountFrozen } = props;
-    
-    const [view, setView] = useState<'profile' | 'bank' | 'market' | 'customize'>('profile');
+}> = ({ currentUser, users, transactions, loans, onTransferFunds, onApplyForLoan, isAccountFrozen }) => {
     const [bankView, setBankView] = useState<'wallet' | 'loans'>('wallet');
-    const [marketView, setMarketView] = useState<'badges' | 'cosmetics'>('badges');
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    // Profile state
-    const [avatar, setAvatar] = useState(currentUser.avatar);
-    const [bio, setBio] = useState(currentUser.bio || '');
 
     // Wallet state
     const [transferUser, setTransferUser] = useState('');
@@ -246,43 +231,6 @@ const ProfileModal: React.FC<{
     const allOtherUsers = useMemo(() => {
         return users.filter(u => u.id !== currentUser.id && !u.isAdmin);
     }, [users, currentUser.id]);
-
-
-    // Badge Prices
-    const badgePrices: Record<string, Record<string, number>> = {
-        blue: { '7': 5, '30': 15, permanent: 50 },
-        red: { '7': 10, '30': 25, permanent: 75 },
-        pink: { '7': 15, '30': 40, permanent: 90 },
-        grey: { '7': 1, '30': 3, permanent: 10 },
-        gold: { permanent: 100 },
-    };
-
-    useEffect(() => {
-        if (isOpen) {
-            setAvatar(currentUser.avatar);
-            setBio(currentUser.bio || '');
-        } else {
-             // Reset views on close
-            setTimeout(() => {
-                setView('profile');
-                setBankView('wallet');
-                setMarketView('badges');
-            }, 300);
-        }
-    }, [currentUser, isOpen]);
-
-    const handleUpdate = async () => {
-        setIsSubmitting(true);
-        await onUpdateProfile({ avatar, bio });
-        setIsSubmitting(false);
-        onClose();
-    };
-    
-    const handleRequest = async () => {
-        setIsSubmitting(true);
-        await onRequestVerification(currentUser.id);
-        setIsSubmitting(false);
-    };
 
     const handleTransfer = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -327,7 +275,145 @@ const ProfileModal: React.FC<{
         }
         setIsSubmitting(false);
     }
+    
+    return (
+        <div className="p-4 space-y-4 overflow-y-auto custom-scrollbar h-full">
+            <div className="flex justify-center gap-2 mb-2 p-1 bg-black/20 rounded-full border border-white/10">
+                <button onClick={() => setBankView('wallet')} className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${bankView === 'wallet' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Wallet</button>
+                <button onClick={() => setBankView('loans')} className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${bankView === 'loans' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Loans</button>
+            </div>
 
+            {bankView === 'wallet' && (
+                <div className="space-y-4">
+                    <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 p-4 rounded-xl text-center">
+                        <p className="text-sm text-slate-300">Current Balance</p>
+                        <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentUser.walletBalance)}</p>
+                    </div>
+                    <form onSubmit={handleTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
+                        <h3 className="font-semibold text-lg text-white">Send Funds</h3>
+                        <UserSelector
+                            users={allOtherUsers}
+                            selectedUserId={transferUser}
+                            onSelectUser={setTransferUser}
+                            disabled={isAccountFrozen}
+                        />
+                        <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
+                        {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
+                        <button type="submit" disabled={isSubmitting || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                            {isSubmitting ? 'Sending...' : 'Send'}
+                        </button>
+                    </form>
+                     <div>
+                        <h3 className="font-semibold text-lg mb-2 text-white">Transaction History</h3>
+                        <div className="space-y-2">
+                            {userTransactions.length > 0 ? userTransactions.slice(0, 5).map(t => {
+                                const isCredit = t.toUserId === currentUser.id;
+                                return (
+                                    <div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center">
+                                        <div>
+                                            <p className="font-semibold">{t.description}</p>
+                                            <p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p>
+                                        </div>
+                                        <p className={`font-bold ${isCredit ? 'text-green-400' : 'text-red-400'}`}>{isCredit ? '+' : '-'}{formatCurrency(t.amount)}</p>
+                                    </div>
+                                )
+                            }) : <p className="text-sm text-center text-slate-500 p-4">No transactions yet.</p>}
+                        </div>
+                     </div>
+                </div>
+            )}
+            {bankView === 'loans' && (
+                <div className="space-y-4">
+                   <form onSubmit={handleLoanApplication} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
+                        <h3 className="font-semibold text-lg text-white">Apply for a Loan</h3>
+                        <input type="number" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} placeholder="Loan Amount (USD)" min="1" step="1" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
+                        <textarea value={loanReason} onChange={e => setLoanReason(e.target.value)} placeholder="Reason for loan..." rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}></textarea>
+                        {loanMessage.text && <p className={`text-sm text-center ${loanMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{loanMessage.text}</p>}
+                        <button type="submit" disabled={isSubmitting || isAccountFrozen} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
+                            {isSubmitting ? 'Submitting...' : 'Submit Application'}
+                        </button>
+                   </form>
+                   <div>
+                        <h3 className="font-semibold text-lg mb-2 text-white">Loan History</h3>
+                        <div className="space-y-2">
+                             {userLoans.length > 0 ? userLoans.map(loan => (
+                                 <div key={loan.id} className="text-sm p-3 bg-white/5 rounded-lg">
+                                     <div className="flex justify-between items-start">
+                                         <div>
+                                             <p className="font-bold text-lg text-white">{formatCurrency(loan.amount)}</p>
+                                             <p className="text-xs text-slate-400">{new Date(loan.requestedAt).toLocaleDateString()}</p>
+                                         </div>
+                                         <span className={`px-2 py-1 text-xs font-semibold rounded-full capitalize ${loan.status === 'pending' ? 'bg-amber-500/10 text-amber-300' : loan.status === 'approved' ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300'}`}>{loan.status}</span>
+                                     </div>
+                                     <p className="text-slate-300 mt-2 text-xs italic">"{loan.reason}"</p>
+                                 </div>
+                             )) : <p className="text-sm text-center text-slate-500 p-4">No loan applications yet.</p>}
+                        </div>
+                   </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+
+// --- Profile, Wallet & Marketplace Modal ---
+const ProfileModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    currentUser: User;
+    onUpdateProfile: (params: { avatar: string, bio: string }) => Promise<void>;
+    onRequestVerification: (userId: string) => Promise<void>;
+    onPurchaseVerification: (badgeType: VerificationBadgeType, duration: number | 'permanent', cost: number) => Promise<{success: boolean, message: string}>;
+    onPurchaseCosmetic: (item: { type: 'border' | 'nameColor', id: string, price: number, name: string }) => Promise<{success: boolean, message: string}>;
+    onEquipCustomization: (type: 'border' | 'nameColor', itemId: string | undefined) => Promise<void>;
+    isAccountFrozen: boolean;
+}> = (props) => {
+    const { isOpen, onClose, currentUser, onUpdateProfile, onRequestVerification, onPurchaseVerification, onPurchaseCosmetic, onEquipCustomization, isAccountFrozen } = props;
+    
+    const [view, setView] = useState<'profile' | 'market' | 'customize'>('profile');
+    const [marketView, setMarketView] = useState<'badges' | 'cosmetics'>('badges');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Profile state
+    const [avatar, setAvatar] = useState(currentUser.avatar);
+    const [bio, setBio] = useState(currentUser.bio || '');
+
+    // Badge Prices
+    const badgePrices: Record<string, Record<string, number>> = {
+        blue: { '7': 5, '30': 15, permanent: 50 },
+        red: { '7': 10, '30': 25, permanent: 75 },
+        pink: { '7': 15, '30': 40, permanent: 90 },
+        grey: { '7': 1, '30': 3, permanent: 10 },
+        gold: { permanent: 100 },
+    };
+
+    useEffect(() => {
+        if (isOpen) {
+            setAvatar(currentUser.avatar);
+            setBio(currentUser.bio || '');
+        } else {
+             // Reset views on close
+            setTimeout(() => {
+                setView('profile');
+                setMarketView('badges');
+            }, 300);
+        }
+    }, [currentUser, isOpen]);
+
+    const handleUpdate = async () => {
+        setIsSubmitting(true);
+        await onUpdateProfile({ avatar, bio });
+        setIsSubmitting(false);
+        onClose();
+    };
+    
+    const handleRequest = async () => {
+        setIsSubmitting(true);
+        await onRequestVerification(currentUser.id);
+        setIsSubmitting(false);
+    };
+    
     const handlePurchaseBadge = async (badge: VerificationBadgeType, duration: string, cost: number) => {
         if (currentUser.walletBalance < cost) {
             alert("Insufficient funds.");
@@ -385,7 +471,6 @@ const ProfileModal: React.FC<{
             <div className="border-b border-white/10 mb-4">
                 <nav className="flex -mb-px space-x-1 sm:space-x-2">
                     <button onClick={() => setView('profile')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'profile' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><PencilIcon className="w-4 h-4" /> Profile</button>
-                    <button onClick={() => setView('bank')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'bank' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><BanknotesIcon className="w-4 h-4" /> Bank</button>
                     <button onClick={() => setView('market')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'market' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><ShoppingCartIcon className="w-4 h-4" /> Market</button>
                     <button onClick={() => setView('customize')} className={`px-2 sm:px-3 py-2 text-sm font-medium border-b-2 flex items-center gap-1.5 ${view === 'customize' ? 'border-cyan-400 text-cyan-300' : 'border-transparent text-slate-400 hover:text-white'}`}><PaintBrushIcon className="w-4 h-4" /> Customize</button>
                 </nav>
@@ -432,84 +517,6 @@ const ProfileModal: React.FC<{
                     <button onClick={handleUpdate} disabled={isSubmitting} className="px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg transition-colors font-semibold disabled:bg-slate-600 disabled:opacity-70">{isSubmitting ? 'Saving...' : 'Save Changes'}</button>
                 </div>
                 </>
-            )}
-            {view === 'bank' && (
-                <div className="max-h-[28rem] overflow-y-auto custom-scrollbar pr-2 -mr-2">
-                    <div className="flex justify-center gap-2 mb-4 p-1 bg-black/20 rounded-full border border-white/10 sticky top-0 backdrop-blur-sm z-10">
-                        <button onClick={() => setBankView('wallet')} className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${bankView === 'wallet' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Wallet</button>
-                        <button onClick={() => setBankView('loans')} className={`flex-1 px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${bankView === 'loans' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Loans</button>
-                    </div>
-
-                    {bankView === 'wallet' && (
-                        <>
-                            <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 p-4 rounded-xl mb-4 text-center">
-                                <p className="text-sm text-slate-300">Current Balance</p>
-                                <p className="text-4xl font-bold text-white tracking-tight">{formatCurrency(currentUser.walletBalance)}</p>
-                            </div>
-                            <form onSubmit={handleTransfer} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10">
-                                <h3 className="font-semibold text-lg text-white">Send Funds</h3>
-                                <UserSelector
-                                    users={allOtherUsers}
-                                    selectedUserId={transferUser}
-                                    onSelectUser={setTransferUser}
-                                    disabled={isAccountFrozen}
-                                />
-                                <input type="number" value={transferAmount} onChange={e => setTransferAmount(e.target.value)} placeholder="Amount (USD)" min="0.01" step="0.01" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
-                                {transferMessage.text && <p className={`text-sm text-center ${transferMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{transferMessage.text}</p>}
-                                <button type="submit" disabled={isSubmitting || isAccountFrozen || (!!parseFloat(transferAmount) && currentUser.walletBalance < parseFloat(transferAmount))} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
-                                    {isSubmitting ? 'Sending...' : 'Send'}
-                                </button>
-                            </form>
-                             <div className="mt-4">
-                                <h3 className="font-semibold text-lg mb-2 text-white">Transaction History</h3>
-                                <div className="max-h-40 overflow-y-auto custom-scrollbar space-y-2 pr-2 -mr-2">
-                                    {userTransactions.length > 0 ? userTransactions.map(t => {
-                                        const isCredit = t.toUserId === currentUser.id;
-                                        return (
-                                            <div key={t.id} className="text-sm p-2 bg-white/5 rounded-lg flex justify-between items-center">
-                                                <div>
-                                                    <p className="font-semibold">{t.description}</p>
-                                                    <p className="text-xs text-slate-400">{new Date(t.timestamp).toLocaleString()}</p>
-                                                </div>
-                                                <p className={`font-bold ${isCredit ? 'text-green-400' : 'text-red-400'}`}>{isCredit ? '+' : '-'}{formatCurrency(t.amount)}</p>
-                                            </div>
-                                        )
-                                    }) : <p className="text-sm text-center text-slate-500 p-4">No transactions yet.</p>}
-                                </div>
-                             </div>
-                        </>
-                    )}
-                    {bankView === 'loans' && (
-                        <>
-                           <form onSubmit={handleLoanApplication} className="space-y-3 p-4 bg-black/20 rounded-xl border border-white/10 mb-4">
-                                <h3 className="font-semibold text-lg text-white">Apply for a Loan</h3>
-                                <input type="number" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} placeholder="Loan Amount (USD)" min="1" step="1" className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen} />
-                                <textarea value={loanReason} onChange={e => setLoanReason(e.target.value)} placeholder="Reason for loan..." rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg py-2 px-4 text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" disabled={isAccountFrozen}></textarea>
-                                {loanMessage.text && <p className={`text-sm text-center ${loanMessage.type === 'error' ? 'text-red-400' : 'text-green-400'}`}>{loanMessage.text}</p>}
-                                <button type="submit" disabled={isSubmitting || isAccountFrozen} className="w-full px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-lg font-semibold disabled:from-slate-600 disabled:opacity-70">
-                                    {isSubmitting ? 'Submitting...' : 'Submit Application'}
-                                </button>
-                           </form>
-                           <div>
-                                <h3 className="font-semibold text-lg mb-2 text-white">Loan History</h3>
-                                <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-2">
-                                     {userLoans.length > 0 ? userLoans.map(loan => (
-                                         <div key={loan.id} className="text-sm p-3 bg-white/5 rounded-lg">
-                                             <div className="flex justify-between items-start">
-                                                 <div>
-                                                     <p className="font-bold text-lg text-white">{formatCurrency(loan.amount)}</p>
-                                                     <p className="text-xs text-slate-400">{new Date(loan.requestedAt).toLocaleDateString()}</p>
-                                                 </div>
-                                                 <span className={`px-2 py-1 text-xs font-semibold rounded-full capitalize ${loan.status === 'pending' ? 'bg-amber-500/10 text-amber-300' : loan.status === 'approved' ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300'}`}>{loan.status}</span>
-                                             </div>
-                                             <p className="text-slate-300 mt-2 text-xs italic">"{loan.reason}"</p>
-                                         </div>
-                                     )) : <p className="text-sm text-center text-slate-500 p-4">No loan applications yet.</p>}
-                                </div>
-                           </div>
-                        </>
-                    )}
-                </div>
             )}
             {view === 'market' && (
                 <div className="space-y-4 max-h-[28rem] overflow-y-auto custom-scrollbar pr-2 -mr-2">
@@ -664,8 +671,8 @@ interface SidebarProps {
   onLogout: () => Promise<void>;
   searchTerm: string;
   setSearchTerm: (term: string) => void;
-  sidebarView: 'chats' | 'users' | 'requests';
-  setSidebarView: (view: 'chats' | 'users' | 'requests') => void;
+  sidebarView: 'chats' | 'users' | 'requests' | 'bank';
+  setSidebarView: (view: 'chats' | 'users' | 'requests' | 'bank') => void;
   friendRequests: Connection[];
   isMultiDeleteMode: boolean;
   setIsMultiDeleteMode: (isDeleting: boolean) => void;
@@ -681,9 +688,14 @@ interface SidebarProps {
   handleCreateNewChat: (targetUser: User) => Promise<void>;
   onUpdateConnection: (connectionId: string, status: ConnectionStatus) => Promise<void>;
   handleDeleteSelectedChats: () => Promise<void>;
+  transactions: Transaction[];
+  loans: Loan[];
+  onTransferFunds: (toUserId: string, amount: number) => Promise<{success: boolean, message: string}>;
+  onApplyForLoan: (amount: number, reason: string) => Promise<{success: boolean, message: string}>;
+  isAccountFrozen: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentUser, setIsProfileModalOpen, onLogout, searchTerm, setSearchTerm, sidebarView, setSidebarView, friendRequests, isMultiDeleteMode, setIsMultiDeleteMode, isMobileSidebarOpen, filteredChats, activeChatId, handleSelectChat, chatsToDelete, users, filteredUsers, connections, onSendRequest, handleCreateNewChat, onUpdateConnection, handleDeleteSelectedChats }) => (
+const Sidebar: React.FC<SidebarProps> = ({ currentUser, setIsProfileModalOpen, onLogout, searchTerm, setSearchTerm, sidebarView, setSidebarView, friendRequests, isMultiDeleteMode, setIsMultiDeleteMode, isMobileSidebarOpen, filteredChats, activeChatId, handleSelectChat, chatsToDelete, users, filteredUsers, connections, onSendRequest, handleCreateNewChat, onUpdateConnection, handleDeleteSelectedChats, transactions, loans, onTransferFunds, onApplyForLoan, isAccountFrozen }) => (
     <aside className={`absolute md:relative z-20 w-80 md:w-96 h-full bg-black/20 backdrop-blur-2xl border-r border-white/10 flex-shrink-0 flex flex-col transition-transform duration-300 ${isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         <div className="p-4 border-b border-white/10 flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -710,6 +722,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, setIsProfileModalOpen, o
                 <div className="flex space-x-1 bg-black/20 p-1 rounded-full">
                     <button onClick={() => setSidebarView('chats')} className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'chats' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Chats</button>
                     <button onClick={() => setSidebarView('users')} className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'users' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Users</button>
+                    <button onClick={() => setSidebarView('bank')} className={`px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'bank' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>Bank</button>
                     <button onClick={() => setSidebarView('requests')} className={`relative px-3 py-1.5 text-sm font-semibold rounded-full transition-colors ${sidebarView === 'requests' ? 'bg-white/10 text-white' : 'text-slate-400'}`}>
                         Requests {friendRequests.length > 0 && <span className="absolute -top-1 -right-1 h-4 w-4 text-xs bg-red-500 rounded-full">{friendRequests.length}</span>}
                     </button>
@@ -762,6 +775,17 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, setIsProfileModalOpen, o
                         );
                     })}
                 </div>
+            )}
+            {sidebarView === 'bank' && (
+                <UserBankPanel
+                    currentUser={currentUser}
+                    users={users}
+                    transactions={transactions}
+                    loans={loans}
+                    onTransferFunds={onTransferFunds}
+                    onApplyForLoan={onApplyForLoan}
+                    isAccountFrozen={isAccountFrozen}
+                />
             )}
             {sidebarView === 'requests' && (
                 <div className="p-2 space-y-1">
@@ -890,7 +914,7 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
     const [activeChatId, setActiveChatId] = useState<string | null>(null);
     const [newMessage, setNewMessage] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
-    const [sidebarView, setSidebarView] = useState<'chats' | 'users' | 'requests'>('chats');
+    const [sidebarView, setSidebarView] = useState<'chats' | 'users' | 'requests' | 'bank'>('chats');
     const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isReportModalOpen, setIsReportModalOpen] = useState(false);
@@ -1147,6 +1171,11 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 handleCreateNewChat={handleCreateNewChat}
                 onUpdateConnection={onUpdateConnection}
                 handleDeleteSelectedChats={handleDeleteSelectedChats}
+                transactions={transactions}
+                loans={loans}
+                onTransferFunds={onTransferFunds}
+                onApplyForLoan={onApplyForLoan}
+                isAccountFrozen={isAccountFrozen}
             />
 
             <ChatArea
@@ -1175,16 +1204,11 @@ const ChatRoom: React.FC<ChatRoomProps> = (props) => {
                 isOpen={isProfileModalOpen}
                 onClose={() => setIsProfileModalOpen(false)}
                 currentUser={currentUser}
-                users={users}
-                transactions={transactions}
-                loans={loans}
                 onUpdateProfile={onUpdateUserProfile}
                 onRequestVerification={onRequestVerification}
-                onTransferFunds={onTransferFunds}
                 onPurchaseVerification={onPurchaseVerification}
                 onPurchaseCosmetic={onPurchaseCosmetic}
                 onEquipCustomization={onEquipCustomization}
-                onApplyForLoan={onApplyForLoan}
                 isAccountFrozen={isAccountFrozen}
             />
 
